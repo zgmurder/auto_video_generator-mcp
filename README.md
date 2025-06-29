@@ -4,7 +4,7 @@
 
 ## 🆕 新增功能：异步任务管理
 
-为了解决大模型调用时因视频生成时间长而导致的连接超时问题，我们新增了异步任务管理功能：
+为了解决大模型调用时因视频生成时间长而导致的连接超时问题，我们新增了异步任务管理功能，**现在默认使用异步任务处理**：
 
 ### 异步功能特性
 - **长时间任务处理**：避免连接超时，支持后台处理
@@ -12,30 +12,40 @@
 - **并发任务支持**：支持多个任务同时运行
 - **任务取消功能**：可取消正在运行的任务
 
-### 快速使用异步功能
+### 默认使用异步任务
+现在调用 `generate_auto_video_mcp` 会自动使用异步任务处理，避免连接超时：
+
 ```python
-# 1. 创建异步任务
-result = await mcp.call_tool("generate_auto_video_async", {
+# 默认使用异步任务（推荐）
+result = await mcp.call_tool("generate_auto_video_mcp", {
     "video_path": "input_video.mp4",
-    "text": "长时间处理的视频内容",
+    "text": "视频内容",
     "voice_index": 0
 })
 
+# 返回任务ID，需要查询状态
 task_info = json.loads(result)
 task_id = task_info["task_id"]
 
-# 2. 查询任务状态
+# 查询任务状态
 status_result = await mcp.call_tool("get_task_status", {
     "task_id": task_id
 })
+```
 
-# 3. 等待任务完成
-while True:
-    status_info = json.loads(status_result)
-    if status_info['status'] == 'completed':
-        print("任务完成！")
-        break
-    await asyncio.sleep(5)
+### 同步版本（适合短时间任务）
+如果需要同步处理短时间任务，可以使用：
+
+```python
+# 同步版本（适合短时间任务）
+result = await mcp.call_tool("generate_auto_video_sync", {
+    "video_path": "input_video.mp4",
+    "text": "短文本内容",
+    "voice_index": 0
+})
+
+# 直接返回结果
+print(result)
 ```
 
 详细使用指南请参考 [ASYNC_USAGE.md](ASYNC_USAGE.md)
@@ -118,63 +128,99 @@ from auto_video_modules.mcp_tools import get_mcp_instance
 
 mcp = get_mcp_instance()
 
-# 基本视频生成（有文本）
-result = await mcp.call_tool("generate_auto_video", {
+# 默认使用异步任务（推荐）
+result = await mcp.call_tool("generate_auto_video_mcp", {
     "video_path": "input_video.mp4",
     "text": "要转换的文本",
     "voice_index": 0,
     "output_path": "output_video.mp4"
 })
 
-# 仅视频处理（无文本）
-result = await mcp.call_tool("generate_auto_video", {
+# 解析任务ID
+import json
+task_info = json.loads(result)
+task_id = task_info["task_id"]
+
+# 查询任务状态
+while True:
+    status_result = await mcp.call_tool("get_task_status", {
+        "task_id": task_id
+    })
+    
+    status_info = json.loads(status_result)
+    if status_info['status'] == 'completed':
+        print("任务完成！")
+        print(f"结果: {status_info['result']}")
+        break
+    elif status_info['status'] == 'failed':
+        print(f"任务失败: {status_info['error']}")
+        break
+    
+    await asyncio.sleep(5)  # 等待5秒后再次查询
+
+# 同步版本（适合短时间任务）
+result = await mcp.call_tool("generate_auto_video_sync", {
     "video_path": "input_video.mp4",
-    "text": "",  # 空文本，只进行视频处理
-    "output_path": "processed_video.mp4"
+    "text": "短文本内容",
+    "output_path": "sync_output.mp4"
 })
+
+print(result)  # 直接返回结果
 ```
 
 ### 使用场景
 
-#### 1. 完整视频生成（推荐）
+#### 1. 完整视频生成（推荐，默认异步）
 当需要为视频添加语音解说和字幕时使用：
 ```python
-result = await mcp.call_tool("generate_auto_video", {
+result = await mcp.call_tool("generate_auto_video_mcp", {
     "video_path": "input_video.mp4",
     "text": "详细的解说文本内容",
     "voice_index": 0,
     "quality_preset": "720p"
 })
+
+# 处理异步任务
+task_info = json.loads(result)
+task_id = task_info["task_id"]
+# ... 查询任务状态
 ```
 
-#### 2. 仅视频处理
+#### 2. 仅视频处理（默认异步）
 当只需要对视频进行剪辑、画质调整等处理时使用：
 ```python
-result = await mcp.call_tool("generate_auto_video", {
+result = await mcp.call_tool("generate_auto_video_mcp", {
     "video_path": "input_video.mp4",
     "text": "",  # 空文本
     "segments_mode": "keep",
     "segments": json.dumps([{"start": "00:00:10", "end": "00:00:30"}]),
     "quality_preset": "480p"
 })
+
+# 处理异步任务
+task_info = json.loads(result)
+task_id = task_info["task_id"]
+# ... 查询任务状态
 ```
 
-#### 3. 快速预览
+#### 3. 快速预览（同步版本）
 使用低画质快速生成预览版本：
 ```python
-result = await mcp.call_tool("generate_auto_video", {
+result = await mcp.call_tool("generate_auto_video_sync", {
     "video_path": "input_video.mp4",
     "text": "预览文本",
     "quality_preset": "240p"  # 低画质快速预览
 })
+
+print(result)  # 直接返回结果
 ```
 
 ### 3. 高级配置示例
 
 #### 视频片段剪辑
 ```python
-# 保留指定片段
-result = await mcp.call_tool("generate_auto_video", {
+# 保留指定片段（默认异步）
+result = await mcp.call_tool("generate_auto_video_mcp", {
     "video_path": "input.mp4",
     "text": "文本内容",
     "segments_mode": "keep",
@@ -184,8 +230,13 @@ result = await mcp.call_tool("generate_auto_video", {
     ])
 })
 
-# 剪掉指定片段
-result = await mcp.call_tool("generate_auto_video", {
+# 处理异步任务
+task_info = json.loads(result)
+task_id = task_info["task_id"]
+# ... 查询任务状态
+
+# 剪掉指定片段（默认异步）
+result = await mcp.call_tool("generate_auto_video_mcp", {
     "video_path": "input.mp4",
     "text": "文本内容",
     "segments_mode": "cut",
@@ -193,11 +244,16 @@ result = await mcp.call_tool("generate_auto_video", {
         {"start": "00:00:10", "end": "00:00:20"}
     ])
 })
+
+# 处理异步任务
+task_info = json.loads(result)
+task_id = task_info["task_id"]
+# ... 查询任务状态
 ```
 
 #### 自定义字幕样式
 ```python
-result = await mcp.call_tool("generate_auto_video", {
+result = await mcp.call_tool("generate_auto_video_mcp", {
     "video_path": "input.mp4",
     "text": "文本内容",
     "subtitle_style": json.dumps({
@@ -208,12 +264,17 @@ result = await mcp.call_tool("generate_auto_video", {
         "marginBottom": 80
     })
 })
+
+# 处理异步任务
+task_info = json.loads(result)
+task_id = task_info["task_id"]
+# ... 查询任务状态
 ```
 
 #### 智能文本分割
 ```python
-# 智能分割
-result = await mcp.call_tool("generate_auto_video", {
+# 智能分割（默认异步）
+result = await mcp.call_tool("generate_auto_video_mcp", {
     "video_path": "input.mp4",
     "text": "文本内容",
     "auto_split_config": json.dumps({
@@ -223,8 +284,13 @@ result = await mcp.call_tool("generate_auto_video", {
     })
 })
 
-# 按时长分割
-result = await mcp.call_tool("generate_auto_video", {
+# 处理异步任务
+task_info = json.loads(result)
+task_id = task_info["task_id"]
+# ... 查询任务状态
+
+# 按时长分割（默认异步）
+result = await mcp.call_tool("generate_auto_video_mcp", {
     "video_path": "input.mp4",
     "text": "文本内容",
     "auto_split_config": json.dumps({
@@ -233,29 +299,11 @@ result = await mcp.call_tool("generate_auto_video", {
         "targetDuration": 2.0
     })
 })
-```
 
-#### 完整配置示例
-```python
-result = await mcp.call_tool("generate_auto_video", {
-    "video_path": "input.mp4",
-    "text": "完整的视频生成示例",
-    "voice_index": 1,
-    "output_path": "output.mp4",
-    "segments_mode": "cut",
-    "segments": json.dumps([{"start": "00:00:10", "end": "00:00:20"}]),
-    "subtitle_style": json.dumps({
-        "fontSize": 45,
-        "color": "red",
-        "bgColor": [255, 255, 255, 100]
-    }),
-    "auto_split_config": json.dumps({
-        "enable": True,
-        "strategy": "duration",
-        "targetDuration": 2.0
-    }),
-    "quality_preset": "720p"  # 画质预设: 240p, 360p, 480p, 720p, 1080p
-})
+# 处理异步任务
+task_info = json.loads(result)
+task_id = task_info["task_id"]
+# ... 查询任务状态
 ```
 
 ## 可用工具

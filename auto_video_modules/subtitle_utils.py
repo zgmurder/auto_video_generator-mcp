@@ -100,15 +100,11 @@ def create_subtitle_image(text, width, height, font_path, fontsize=40, color='bl
     
     return np.array(img)
 
-def split_timings(timing, max_chars=20):
-    """智能分割timing，支持时间标记作为静默间隔
-    
-    Args:
-        timing: 字幕时间列表
-        max_chars: 每行最大字符数
-        
-    Returns:
-        list: 分割后的字幕时间列表
+def split_timings(timing, max_chars=20, min_chars=5):
+    """智能分割timing，根据maxLength和minLength进行分割：
+    1. 按字符数分割（max_chars和min_chars）
+    2. 时间标记处理（如 {5000ms}）
+    3. 智能时长分配
     """
     new_timings = []
     
@@ -169,75 +165,150 @@ def split_timings(timing, max_chars=20):
             # 处理分割后的片段
             for segment in segments:
                 if segment['text']:
-                    # 有文本的片段，进行智能分割
-                    sub_segments = _smart_split_text(segment['text'], max_chars, duration / len([s for s in segments if s['text']]))
+                    # 有文本的片段，按字符数分割
+                    sub_segments = _split_by_length(segment['text'], max_chars, min_chars, duration / len([s for s in segments if s['text']]))
                     new_timings.extend(sub_segments)
                 else:
                     # 纯静默片段
                     new_timings.append({'text': '', 'duration': 0, 'delay': segment['delay']})
         else:
-            # 不包含时间标记，使用原有逻辑
-            sub_segments = _smart_split_text(txt, max_chars, duration)
+            # 不包含时间标记，直接按字符数分割
+            sub_segments = _split_by_length(txt, max_chars, min_chars, duration)
             new_timings.extend(sub_segments)
     
     return new_timings
 
-def _smart_split_text(text, max_chars, total_duration):
-    """智能分割文本的内部函数
+def _split_by_length(text, max_chars, min_chars, total_duration):
+    """根据字符数分割文本，保持词语连贯性
     
     Args:
         text: 要分割的文本
-        max_chars: 每行最大字符数
+        max_chars: 最大字符数
+        min_chars: 最小字符数
         total_duration: 总时长
         
     Returns:
         list: 分割后的片段列表
     """
-    # 策略1：按句子分割（句号、问号、感叹号）
-    sentences = []
-    current_sentence = ""
-    for char in text:
-        current_sentence += char
-        if char in '。？！.!?':
-            sentences.append(current_sentence.strip())
-            current_sentence = ""
-    if current_sentence.strip():
-        sentences.append(current_sentence.strip())
-        
-    # 如果按句子分割后只有一句，尝试按逗号分割
-    if len(sentences) <= 1:
-        sentences = []
-        current_sentence = ""
-        for char in text:
-            current_sentence += char
-            if char in '，,；;':
-                sentences.append(current_sentence.strip())
-                current_sentence = ""
-        if current_sentence.strip():
-            sentences.append(current_sentence.strip())
-            
-    # 如果按逗号分割后只有一句，按字符数分割
-    if len(sentences) <= 1:
-        sentences = [text[i:i+max_chars] for i in range(0, len(text), max_chars)]
-        
-    # 智能时长分配
-    if len(sentences) == 1:
+    if len(text) <= max_chars:
+        # 文本长度在范围内，不需要分割
         return [{'text': text, 'duration': total_duration, 'delay': 0}]
-    else:
-        # 根据句子长度比例分配时长
-        total_chars = sum(len(s) for s in sentences)
-        result = []
-        for sentence in sentences:
-            if total_chars > 0:
-                sentence_duration = (len(sentence) / total_chars) * total_duration
-            else:
-                sentence_duration = total_duration / len(sentences)
-            result.append({
-                'text': sentence, 
-                'duration': sentence_duration,
+    
+    segments = []
+    current_pos = 0
+    
+    while current_pos < len(text):
+        # 计算当前片段的结束位置
+        end_pos = min(current_pos + max_chars, len(text))
+        
+        # 如果剩余文本长度小于min_chars，将剩余文本合并到当前片段
+        if len(text) - current_pos <= min_chars:
+            end_pos = len(text)
+        else:
+            # 尝试在词语边界分割，避免在词语中间断开
+            end_pos = _find_word_boundary(text, current_pos, end_pos, min_chars)
+        
+        # 提取当前片段
+        segment_text = text[current_pos:end_pos].strip()
+        
+        if segment_text:
+            # 根据字符数比例分配时长
+            segment_ratio = len(segment_text) / len(text)
+            segment_duration = total_duration * segment_ratio
+            
+            segments.append({
+                'text': segment_text,
+                'duration': segment_duration,
                 'delay': 0
             })
-        return result
+        
+        current_pos = end_pos
+    
+    return segments
+
+def _find_word_boundary(text, start_pos, max_end_pos, min_chars):
+    """在词语边界寻找合适的分割点
+    
+    Args:
+        text: 文本
+        start_pos: 开始位置
+        max_end_pos: 最大结束位置
+        min_chars: 最小字符数
+        
+    Returns:
+        int: 合适的分割位置
+    """
+    # 如果当前片段长度小于最小字符数，直接返回最大位置
+    if max_end_pos - start_pos < min_chars:
+        return max_end_pos
+    
+    # 定义句子结束标点（优先在这些位置分割）
+    sentence_endings = set('。！？.!?')
+    
+    # 定义词语分隔符（次优先在这些位置分割）
+    word_separators = set('，；：、,;: ')
+    
+    # 首先尝试在句子结束位置分割
+    for i in range(max_end_pos - 1, start_pos + min_chars - 1, -1):
+        if text[i] in sentence_endings:
+            # 找到句子结束标点，返回标点后的位置
+            return i + 1
+    
+    # 然后尝试在词语分隔符位置分割
+    for i in range(max_end_pos - 1, start_pos + min_chars - 1, -1):
+        if text[i] in word_separators:
+            # 找到分隔符，返回分隔符后的位置
+            return i + 1
+    
+    # 如果没有找到合适的分隔符，尝试在字符边界分割
+    # 避免在汉字中间分割（虽然不太可能，但作为保险）
+    for i in range(max_end_pos - 1, start_pos + min_chars - 1, -1):
+        # 检查是否是完整的字符边界
+        if _is_character_boundary(text, i):
+            return i + 1
+    
+    # 如果实在找不到合适的分割点，返回最大位置
+    return max_end_pos
+
+def _is_character_boundary(text, pos):
+    """检查指定位置是否是字符边界
+    
+    Args:
+        text: 文本
+        pos: 位置
+        
+    Returns:
+        bool: 是否是字符边界
+    """
+    if pos < 0 or pos >= len(text):
+        return True
+    
+    # 对于中文字符，每个字符都是独立的边界
+    # 对于英文单词，检查前后字符
+    char = text[pos]
+    
+    # 如果是中文字符，认为是边界
+    if '\u4e00' <= char <= '\u9fff':
+        return True
+    
+    # 如果是标点符号，认为是边界
+    if char in '，。！？；：、,.!?;: ':
+        return True
+    
+    # 对于英文字符，检查前后是否是字母
+    if pos > 0:
+        prev_char = text[pos - 1]
+        # 如果前一个字符是字母，当前字符也是字母，则不是边界
+        if prev_char.isalpha() and char.isalpha():
+            return False
+    
+    if pos < len(text) - 1:
+        next_char = text[pos + 1]
+        # 如果下一个字符是字母，当前字符也是字母，则不是边界
+        if next_char.isalpha() and char.isalpha():
+            return False
+    
+    return True
 
 def auto_split_timing_by_duration(timing, target_duration_per_segment=3.0):
     """根据目标时长自动分割timing

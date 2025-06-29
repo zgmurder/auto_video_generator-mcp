@@ -21,7 +21,7 @@ import opencc
 mcp = FastMCP("video-utils", log_level="ERROR")
 
 def create_subtitle_image_pil(text, fontsize=40, color='white', font_path=None, size=(1920,1080), bg_color=(0,0,0,0), subtitle_height=100):
-    """用PIL生成带透明背景的字幕图片，返回图片路径"""
+    """用PIL生成带透明背景的字幕图片，返回numpy数组（与原始版本保持一致）"""
     # 处理颜色格式
     def parse_color(color_input):
         if isinstance(color_input, str):
@@ -96,6 +96,7 @@ def create_subtitle_image_pil(text, fontsize=40, color='white', font_path=None, 
     try:
         if font_path and os.path.exists(font_path):
             font = ImageFont.truetype(font_path, fontsize)
+            print(f"成功加载字体: {font_path}")
         else:
             font = ImageFont.load_default()
             print("使用默认字体")
@@ -104,26 +105,40 @@ def create_subtitle_image_pil(text, fontsize=40, color='white', font_path=None, 
         font = ImageFont.load_default()
         print("回退到默认字体")
     
+    # 与原始版本保持一致：只显示一行，超长截断
+    margin_x = 100
+    margin_bottom = 50
+    max_text_width = subtitle_size[0] - 2 * margin_x
+    
+    # 计算每行最大字符数
+    try:
+        avg_char_width = font.getlength('测')
+        max_chars_per_line = max(int(max_text_width // avg_char_width), 1)
+    except AttributeError:
+        # 如果getlength不存在，使用估算
+        max_chars_per_line = max(int(max_text_width // (fontsize * 0.6)), 1)
+    
+    # 只取第一行，超长截断
+    if len(text) > max_chars_per_line:
+        text = text[:max_chars_per_line] + '...'
+    
     # 计算文本尺寸
     try:
         bbox = draw.textbbox((0, 0), text, font=font)
         w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     except AttributeError:
         # 如果textbbox不存在，使用默认值
-        w, h = len(text) * fontsize, fontsize
+        w, h = len(text) * fontsize * 0.6, fontsize
     
-    # 计算文本位置（居中）
+    # 计算文本位置（水平居中，底部对齐）
     x = (subtitle_size[0] - w) // 2
-    y = subtitle_size[1] - h - 60
+    y = subtitle_size[1] - h - margin_bottom
     
     # 绘制文本
     draw.text((x, y), text, font=font, fill=text_color)
     
-    # 保存为临时文件
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-    img.save(tmp.name, 'PNG')
-    
-    return tmp.name
+    # 返回numpy数组，与原始版本保持一致
+    return np.array(img)
 
 def to_seconds(t):
     """将时间字符串转换为秒数
@@ -364,6 +379,7 @@ async def generate_video(config, timing):
     enable_auto_split = split_config.get('enable', True)
     split_strategy = split_config.get('strategy', 'smart')
     max_chars = split_config.get('maxChars', 20)
+    min_chars = split_config.get('minLength', 5)
     target_duration = split_config.get('targetDuration', 3.0)
     
     # 获取ffmpeg路径
@@ -405,7 +421,7 @@ async def generate_video(config, timing):
     
     if enable_auto_split:
         if split_strategy == 'smart':
-            timings = split_timings(timing, max_chars=max_chars)
+            timings = split_timings(timing, max_chars=max_chars, min_chars=min_chars)
             print(f"使用智能分割策略，最大字符数: {max_chars}")
         elif split_strategy == 'duration':
             timings = auto_split_timing_by_duration(timing, target_duration)
@@ -558,44 +574,92 @@ def get_video_info(video_path):
     except Exception as e:
         return {"error": str(e)}
 
-def create_video_with_subtitles(video_path, audio_path, subtitle_segments, output_path, subtitle_style=None):
-    """用PIL字幕图片合成带字幕视频"""
+def create_video_with_subtitles(video_path, audio_path, subtitle_segments, output_path, subtitle_style=None, subtitle_images=None):
+    """用PIL字幕图片合成带字幕视频
+    
+    Args:
+        video_path: 视频文件路径
+        audio_path: 音频文件路径
+        subtitle_segments: 字幕片段列表，格式为 [(text, start, end), ...]
+        output_path: 输出视频路径
+        subtitle_style: 字幕样式配置
+        subtitle_images: 预生成的字幕图片路径列表，如果为None则自动生成
+    """
     try:
         # 加载视频和音频
         video = VideoFileClip(video_path)
         audio = AudioFileClip(audio_path)
         
-        # 导入配置管理器
-        from .config import get_config
-        config = get_config()
-        subtitle_config = config.get_subtitle_config()
-        
-        # 解析字幕样式配置，使用配置中的默认值
-        if subtitle_style is None:
-            subtitle_style = {}
-        
-        font_size = subtitle_style.get('fontSize', subtitle_config.font_size)
-        color = subtitle_style.get('color', subtitle_config.font_color)
-        bg_color = subtitle_style.get('bgColor', subtitle_config.bg_color)
-        font_path = subtitle_style.get('fontPath', subtitle_config.font_path)
-        margin_x = subtitle_style.get('marginX', subtitle_config.margin_x)
-        margin_bottom = subtitle_style.get('marginBottom', subtitle_config.margin_bottom)
-        subtitle_height = subtitle_style.get('height', 100)
-        
-        # 创建字幕剪辑（PIL图片）
+        # 创建字幕剪辑
         subtitle_clips = []
-        for i, (text, start_time, end_time) in enumerate(subtitle_segments):
-            img_path = create_subtitle_image_pil(
-                text, 
-                fontsize=font_size, 
-                color=color, 
-                font_path=font_path,
-                size=(video.w, video.h),
-                bg_color=bg_color,
-                subtitle_height=subtitle_height
-            )
-            img_clip = ImageClip(img_path).set_position(('center', 'bottom')).set_duration(end_time - start_time).set_start(start_time)
-            subtitle_clips.append(img_clip)
+        
+        if subtitle_images is not None:
+            # 使用预生成的字幕图片
+            for i, (text, start_time, end_time) in enumerate(subtitle_segments):
+                if i < len(subtitle_images) and subtitle_images[i] is not None:
+                    # 使用预生成的图片（numpy数组）
+                    if isinstance(subtitle_images[i], np.ndarray):
+                        # 直接使用numpy数组创建ImageClip
+                        img_clip = ImageClip(subtitle_images[i]).set_position(('center', 'bottom')).set_duration(end_time - start_time).set_start(start_time)
+                    else:
+                        # 如果是文件路径，使用文件路径创建ImageClip
+                        img_clip = ImageClip(subtitle_images[i]).set_position(('center', 'bottom')).set_duration(end_time - start_time).set_start(start_time)
+                    subtitle_clips.append(img_clip)
+                elif text.strip():  # 如果有文本但没有预生成图片，则动态生成
+                    # 导入配置管理器
+                    from .config import get_config
+                    config = get_config()
+                    subtitle_config = config.get_subtitle_config()
+                    
+                    # 解析字幕样式配置
+                    if subtitle_style is None:
+                        subtitle_style = {}
+                    
+                    font_size = subtitle_style.get('fontSize', subtitle_config.font_size)
+                    color = subtitle_style.get('color', subtitle_config.font_color)
+                    bg_color = subtitle_style.get('bgColor', subtitle_config.bg_color)
+                    font_path = subtitle_style.get('fontPath', subtitle_config.font_path)
+                    subtitle_height = subtitle_style.get('height', 100)
+                    
+                    img_array = create_subtitle_image_pil(
+                        text, 
+                        fontsize=font_size, 
+                        color=color, 
+                        font_path=font_path,
+                        size=(video.w, video.h),
+                        bg_color=bg_color,
+                        subtitle_height=subtitle_height
+                    )
+                    img_clip = ImageClip(img_array).set_position(('center', 'bottom')).set_duration(end_time - start_time).set_start(start_time)
+                    subtitle_clips.append(img_clip)
+        else:
+            # 动态生成字幕图片（原有逻辑）
+            from .config import get_config
+            config = get_config()
+            subtitle_config = config.get_subtitle_config()
+            
+            if subtitle_style is None:
+                subtitle_style = {}
+            
+            font_size = subtitle_style.get('fontSize', subtitle_config.font_size)
+            color = subtitle_style.get('color', subtitle_config.font_color)
+            bg_color = subtitle_style.get('bgColor', subtitle_config.bg_color)
+            font_path = subtitle_style.get('fontPath', subtitle_config.font_path)
+            subtitle_height = subtitle_style.get('height', 100)
+            
+            for i, (text, start_time, end_time) in enumerate(subtitle_segments):
+                if text.strip():  # 只处理非空文本
+                    img_path = create_subtitle_image_pil(
+                        text, 
+                        fontsize=font_size, 
+                        color=color, 
+                        font_path=font_path,
+                        size=(video.w, video.h),
+                        bg_color=bg_color,
+                        subtitle_height=subtitle_height
+                    )
+                    img_clip = ImageClip(img_path).set_position(('center', 'bottom')).set_duration(end_time - start_time).set_start(start_time)
+                    subtitle_clips.append(img_clip)
         
         # 合成视频和字幕
         print("正在合成视频和字幕...")

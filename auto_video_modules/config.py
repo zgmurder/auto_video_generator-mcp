@@ -67,8 +67,8 @@ class SystemConfig:
 class AutoSplitConfig:
     """智能分割配置"""
     enabled: bool = True  # 默认开启智能分割
-    max_length: int = 50
-    min_length: int = 10
+    max_length: int = 20
+    min_length: int = 5
     split_chars: str = "。！？；，、"
     preserve_punctuation: bool = True
 

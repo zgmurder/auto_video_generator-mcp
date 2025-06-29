@@ -114,10 +114,17 @@ async def get_all_available_tools() -> str:
 - subtitle_style: 字幕样式配置 JSON字符串（可选）
 - auto_split_config: 智能分割配置 JSON字符串（可选）
 
+=== 智能分割配置 ===
+- 默认开启智能分割
+- 最大长度: 50字符
+- 最小长度: 10字符
+- 分割字符: 。！？；，、
+- 保留标点: 是
+
 === 默认字幕样式 ===
-- 字体大小: 40
+- 字体大小: 50
 - 字体颜色: white (白色)
-- 背景颜色: [0, 0, 0, 0] (透明)
+- 背景颜色: [0, 0, 0, 30] (半透明黑色)
 - 字体路径: arial.ttf
 - 左右边距: 100
 - 底部边距: 50
@@ -128,6 +135,9 @@ subtitle_style: '{"fontSize": 60, "color": "yellow", "bgColor": [0, 0, 0, 128]}'
 auto_split_config: '{"enable": true, "strategy": "smart", "maxChars": 20}'
 """
     return tools_info
+
+# 注册MCP工具
+mcp.tool()(generate_auto_video_mcp)
 
 def main():
     print("启动自动视频生成MCP服务器 v3.0...")

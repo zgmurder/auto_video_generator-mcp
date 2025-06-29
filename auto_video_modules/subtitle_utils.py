@@ -12,7 +12,7 @@ from mcp.server.fastmcp import FastMCP
 # 创建MCP实例
 mcp = FastMCP("subtitle-utils", log_level="ERROR")
 
-def create_subtitle_image(text, width, height, font_path, fontsize=40, color='white', bg_color=(0,0,0,0), margin_x=100, margin_bottom=50):
+def create_subtitle_image(text, width, height, font_path, fontsize=40, color='black', bg_color=(0,0,0,0), margin_x=100, margin_bottom=50):
     """创建字幕图片
     
     Args:

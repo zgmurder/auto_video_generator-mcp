@@ -14,9 +14,116 @@ from moviepy.audio.io.AudioFileClip import AudioFileClip
 from mcp.server.fastmcp import FastMCP
 from PIL import Image, ImageDraw, ImageFont
 import tempfile
+import numpy as np
+import opencc
 
 # 创建MCP实例
 mcp = FastMCP("video-utils", log_level="ERROR")
+
+def create_subtitle_image_pil(text, fontsize=40, color='white', font_path=None, size=(1920,1080), bg_color=(0,0,0,0), subtitle_height=100):
+    """用PIL生成带透明背景的字幕图片，返回图片路径"""
+    # 处理颜色格式
+    def parse_color(color_input):
+        if isinstance(color_input, str):
+            color_map = {
+                'white': (255, 255, 255),
+                'black': (0, 0, 0),
+                'red': (255, 0, 0),
+                'green': (0, 255, 0),
+                'blue': (0, 0, 255),
+                'yellow': (255, 255, 0),
+                'cyan': (0, 255, 255),
+                'magenta': (255, 0, 255),
+                'orange': (255, 165, 0),
+                'purple': (128, 0, 128),
+                'pink': (255, 192, 203),
+                'brown': (165, 42, 42),
+                'gray': (128, 128, 128),
+                'grey': (128, 128, 128)
+            }
+            return color_map.get(color_input.lower(), (255, 255, 255))
+        elif isinstance(color_input, (list, tuple)):
+            if len(color_input) == 3:
+                return tuple(color_input)
+            elif len(color_input) == 4:
+                return tuple(color_input)
+            else:
+                return (255, 255, 255)
+        else:
+            return (255, 255, 255)
+    
+    # 解析颜色
+    text_color = parse_color(color)
+    if isinstance(bg_color, list):
+        background_color = tuple(bg_color)
+    else:
+        background_color = bg_color
+    
+    # 使用字幕区域高度而不是整个视频高度
+    subtitle_size = (size[0], subtitle_height)
+    img = Image.new('RGBA', subtitle_size, background_color)
+    draw = ImageDraw.Draw(img)
+    
+    # 字体路径自动检测 - 优先使用支持中文的字体
+    if font_path is None or not os.path.exists(font_path):
+        # 按优先级排序的中文字体路径
+        chinese_fonts = [
+            # Windows 中文字体
+            r'C:\Windows\Fonts\msyh.ttc',      # 微软雅黑
+            r'C:\Windows\Fonts\simhei.ttf',    # 黑体
+            r'C:\Windows\Fonts\simsun.ttc',    # 宋体
+            r'C:\Windows\Fonts\simkai.ttf',    # 楷体
+            r'C:\Windows\Fonts\msjh.ttc',      # 微软正黑
+            r'C:\Windows\Fonts\arial.ttf',     # Arial
+            # Linux 中文字体
+            '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',  # 文泉驿正黑
+            '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc', # 文泉驿微米黑
+            '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc', # Noto Sans CJK
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', # DejaVu Sans
+            '/usr/share/fonts/truetype/freefont/FreeMono.ttf', # FreeMono
+        ]
+        
+        for fp in chinese_fonts:
+            if os.path.exists(fp):
+                font_path = fp
+                print(f"自动检测到字体: {font_path}")
+                break
+        else:
+            print("警告: 未找到合适的中文字体，将使用默认字体")
+            font_path = None
+    
+    # 加载字体
+    try:
+        if font_path and os.path.exists(font_path):
+            font = ImageFont.truetype(font_path, fontsize)
+        else:
+            font = ImageFont.load_default()
+            print("使用默认字体")
+    except Exception as e:
+        print(f"字体加载失败: {e}")
+        font = ImageFont.load_default()
+        print("回退到默认字体")
+    
+    # 计算文本尺寸
+    try:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    except AttributeError:
+        # 如果textbbox不存在，使用默认值
+        w, h = len(text) * fontsize, fontsize
+    
+    # 计算文本位置（居中）
+    x = (subtitle_size[0] - w) // 2
+    y = subtitle_size[1] - h - 60
+    
+    # 绘制文本
+    draw.text((x, y), text, font=font, fill=text_color)
+    
+    # 保存为临时文件
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+    img.save(tmp.name, 'PNG')
+    
+    return tmp.name
 
 def to_seconds(t):
     """将时间字符串转换为秒数
@@ -146,73 +253,6 @@ def find_imagemagick():
         if path:
             return path
     return None
-
-def create_subtitle_image_pil(text, fontsize=40, color='white', font_path=None, size=(1920,1080), bg_color=(0,0,0,0)):
-    """用PIL生成带透明背景的字幕图片，返回图片路径"""
-    # 处理颜色格式
-    def parse_color(color_input):
-        if isinstance(color_input, str):
-            color_map = {
-                'white': (255, 255, 255),
-                'black': (0, 0, 0),
-                'red': (255, 0, 0),
-                'green': (0, 255, 0),
-                'blue': (0, 0, 255),
-                'yellow': (255, 255, 0),
-                'cyan': (0, 255, 255),
-                'magenta': (255, 0, 255),
-                'orange': (255, 165, 0),
-                'purple': (128, 0, 128),
-                'pink': (255, 192, 203),
-                'brown': (165, 42, 42),
-                'gray': (128, 128, 128),
-                'grey': (128, 128, 128)
-            }
-            return color_map.get(color_input.lower(), (255, 255, 255))
-        elif isinstance(color_input, (list, tuple)):
-            if len(color_input) == 3:
-                return tuple(color_input)
-            elif len(color_input) == 4:
-                return tuple(color_input)
-            else:
-                return (255, 255, 255)
-        else:
-            return (255, 255, 255)
-    # 解析颜色
-    text_color = parse_color(color)
-    if isinstance(bg_color, list):
-        background_color = tuple(bg_color)
-    else:
-        background_color = bg_color
-    img = Image.new('RGBA', size, background_color)
-    draw = ImageDraw.Draw(img)
-    # 字体路径自动检测
-    if font_path is None:
-        for fp in [
-            r'C:\Windows\Fonts\msyh.ttc',
-            r'C:\Windows\Fonts\simhei.ttf',
-            r'C:\Windows\Fonts\arial.ttf',
-            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-            '/usr/share/fonts/truetype/freefont/FreeMono.ttf',
-        ]:
-            if os.path.exists(fp):
-                font_path = fp
-                break
-    try:
-        font = ImageFont.truetype(font_path, fontsize) if font_path else ImageFont.load_default()
-    except Exception:
-        font = ImageFont.load_default()
-    try:
-        bbox = draw.textbbox((0, 0), text, font=font)
-        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    except AttributeError:
-        w, h = draw.textsize(text, font=font)
-    x = (size[0] - w) // 2
-    y = size[1] - h - 60
-    draw.text((x, y), text, font=font, fill=text_color)
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-    img.save(tmp.name, 'PNG')
-    return tmp.name
 
 def merge_audio_video(video_with_subs, audio_file_path, output_path, ffmpeg_path):
     """合并音频和视频
@@ -540,6 +580,7 @@ def create_video_with_subtitles(video_path, audio_path, subtitle_segments, outpu
         font_path = subtitle_style.get('fontPath', subtitle_config.font_path)
         margin_x = subtitle_style.get('marginX', subtitle_config.margin_x)
         margin_bottom = subtitle_style.get('marginBottom', subtitle_config.margin_bottom)
+        subtitle_height = subtitle_style.get('height', 100)
         
         # 创建字幕剪辑（PIL图片）
         subtitle_clips = []
@@ -550,7 +591,8 @@ def create_video_with_subtitles(video_path, audio_path, subtitle_segments, outpu
                 color=color, 
                 font_path=font_path,
                 size=(video.w, video.h),
-                bg_color=bg_color
+                bg_color=bg_color,
+                subtitle_height=subtitle_height
             )
             img_clip = ImageClip(img_path).set_position(('center', 'bottom')).set_duration(end_time - start_time).set_start(start_time)
             subtitle_clips.append(img_clip)

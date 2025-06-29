@@ -37,12 +37,12 @@ class AudioConfig:
 class SubtitleConfig:
     """字幕配置"""
     max_length: int = 50
-    font_size: int = 40
+    font_size: int = 50
     font_color: str = "white"
-    bg_color: tuple = (0, 0, 0, 0)
+    bg_color: tuple = (0, 0, 0, 30)
     margin_x: int = 100
     margin_bottom: int = 50
-    font_path: str = "arial.ttf"
+    font_path: str = r"C:\Windows\Fonts\msyh.ttc"  # 默认使用微软雅黑
 
 @dataclass
 class VideoConfig:
@@ -58,10 +58,19 @@ class VideoConfig:
 @dataclass
 class SystemConfig:
     """系统配置"""
-    max_workers: int = 4
+    max_workers: int = 10
     timeout: int = 300
     cleanup_temp_files: bool = True
     debug_mode: bool = False
+
+@dataclass
+class AutoSplitConfig:
+    """智能分割配置"""
+    enabled: bool = True  # 默认开启智能分割
+    max_length: int = 50
+    min_length: int = 10
+    split_chars: str = "。！？；，、"
+    preserve_punctuation: bool = True
 
 class ConfigManager:
     """配置管理器"""
@@ -73,6 +82,7 @@ class ConfigManager:
         self.subtitle = SubtitleConfig()
         self.video = VideoConfig()
         self.system = SystemConfig()
+        self.auto_split = AutoSplitConfig()
         
         # 从环境变量加载配置
         self._load_from_env()
@@ -124,11 +134,15 @@ class ConfigManager:
         """获取系统配置"""
         return self.system
     
+    def get_auto_split_config(self) -> AutoSplitConfig:
+        """获取智能分割配置"""
+        return self.auto_split
+    
     def update_config(self, config_type: str, **kwargs):
         """更新配置
         
         Args:
-            config_type: 配置类型 (ffmpeg, voice, audio, subtitle, video, system)
+            config_type: 配置类型 (ffmpeg, voice, audio, subtitle, video, system, auto_split)
             **kwargs: 要更新的配置项
         """
         config_map = {
@@ -137,7 +151,8 @@ class ConfigManager:
             "audio": self.audio,
             "subtitle": self.subtitle,
             "video": self.video,
-            "system": self.system
+            "system": self.system,
+            "auto_split": self.auto_split
         }
         
         if config_type not in config_map:
@@ -158,7 +173,8 @@ class ConfigManager:
             "audio": self.audio.__dict__,
             "subtitle": self.subtitle.__dict__,
             "video": self.video.__dict__,
-            "system": self.system.__dict__
+            "system": self.system.__dict__,
+            "auto_split": self.auto_split.__dict__
         }
     
     def from_dict(self, config_dict: Dict[str, Any]):

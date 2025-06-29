@@ -509,7 +509,12 @@ async def generate_video(config, timing):
     # 生成无音频的视频文件
     temp_video_path = "temp_video.mp4"
     print("正在生成无音频视频...")
-    video_with_subs.write_videofile(temp_video_path, codec='libx264', fps=24, audio=False)
+    video_with_subs.write_videofile(
+        temp_video_path, 
+        codec='libx264', 
+        fps=24, 
+        audio=False
+    )
     
     # 用ffmpeg合成，确保主轨道为视频，并加-to参数
     print("正在使用ffmpeg合成音视频...")
@@ -710,8 +715,7 @@ def create_video_with_subtitles(video_path, audio_path, subtitle_segments, outpu
             temp_video_path, 
             codec='libx264', 
             fps=24, 
-            audio=False,
-            resize_algorithm='bicubic'
+            audio=False
         )
         
         # 用ffmpeg合成，应用画质配置

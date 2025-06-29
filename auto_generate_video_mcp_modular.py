@@ -10,6 +10,10 @@ from typing import Any
 # 导入核心功能
 from auto_video_modules.mcp_tools import (
     generate_auto_video,
+    generate_auto_video_async,
+    get_task_status,
+    list_all_tasks,
+    cancel_task,
     get_system_status,
     get_available_voice_options,
     validate_input_parameters,
@@ -88,7 +92,13 @@ async def get_all_available_tools() -> str:
     tools_info = """智能视频剪辑MCP服务器 - 可用工具列表
 
 === 核心功能 ===
-- generate_auto_video_mcp: 智能剪辑视频并自动添加字幕、语音（主要功能）
+- generate_auto_video_mcp: 智能剪辑视频并自动添加字幕、语音（同步版本）
+- generate_auto_video_async: 异步视频生成（推荐用于长时间任务）
+
+=== 任务管理 ===
+- get_task_status: 获取任务状态和进度
+- list_all_tasks: 列出所有任务
+- cancel_task: 取消正在运行的任务
 
 === 配置获取工具 ===
 - get_system_status_mcp: 获取系统状态信息
@@ -96,6 +106,12 @@ async def get_all_available_tools() -> str:
 - validate_input_parameters_mcp: 验证输入参数
 - get_generation_estimate_mcp: 获取生成时间估算
 - get_all_available_tools: 获取所有可用的工具列表
+
+=== 异步任务使用流程 ===
+1. 调用 generate_auto_video_async 创建任务，获得 task_id
+2. 使用 get_task_status 查询任务进度
+3. 任务完成后获取结果
+4. 可选：使用 cancel_task 取消任务
 
 === 时间标记语法 ===
 支持在文本中使用时间标记来控制静默时间：
@@ -149,11 +165,20 @@ auto_split_config: '{"enable": true, "strategy": "smart", "maxChars": 20}'
 2. 完整视频生成: 提供video_path和text
 3. 快速预览: 使用quality_preset="240p"
 4. 高质量输出: 使用quality_preset="1080p"
+
+=== 长时间任务处理建议 ===
+- 对于复杂视频生成，建议使用 generate_auto_video_async
+- 定期查询任务状态，避免超时
+- 任务完成后及时清理临时文件
 """
     return tools_info
 
 # 注册MCP工具
 mcp.tool()(generate_auto_video_mcp)
+mcp.tool()(generate_auto_video_async)
+mcp.tool()(get_task_status)
+mcp.tool()(list_all_tasks)
+mcp.tool()(cancel_task)
 
 def main():
     print("启动自动视频生成MCP服务器 v3.0...")

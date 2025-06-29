@@ -8,7 +8,9 @@ import asyncio
 from mcp.server.fastmcp import FastMCP
 import json
 import subprocess
-from typing import Any
+from typing import Any, Dict
+import uuid
+from datetime import datetime
 
 # 导入各个模块
 from .ffmpeg_utils import setup_ffmpeg, get_mcp_instance as get_ffmpeg_mcp
@@ -19,6 +21,22 @@ from .video_utils import create_video_with_subtitles, get_mcp_instance as get_vi
 
 # 创建主MCP实例
 mcp = FastMCP("auto-video-generator", log_level="ERROR")
+
+# 任务状态管理
+task_status = {}
+
+class VideoGenerationTask:
+    """视频生成任务类"""
+    def __init__(self, task_id: str, params: Dict):
+        self.task_id = task_id
+        self.params = params
+        self.status = "pending"  # pending, running, completed, failed
+        self.progress = 0
+        self.result = None
+        self.error = None
+        self.start_time = None
+        self.end_time = None
+        self.created_at = datetime.now()
 
 def cleanup_temp_files(temp_files):
     """清理临时文件
@@ -616,7 +634,7 @@ async def generate_auto_video_mcp(
     auto_split_config: Any = "",
     quality_preset: Any = "720p"
 ) -> str:
-    """智能剪辑视频并自动添加字幕、语音（主要功能）
+    """智能剪辑视频并自动添加字幕、语音（默认使用异步任务）
     
     Args:
         video_path: 视频文件路径（必传）
@@ -630,7 +648,7 @@ async def generate_auto_video_mcp(
         quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")
         
     Returns:
-        生成结果信息
+        任务ID和状态信息（异步任务）
     """
     import json
     # 保证所有复杂参数为字符串
@@ -640,7 +658,250 @@ async def generate_auto_video_mcp(
         subtitle_style = json.dumps(subtitle_style, ensure_ascii=False)
     if not isinstance(auto_split_config, str):
         auto_split_config = json.dumps(auto_split_config, ensure_ascii=False)
+    
+    # 默认使用异步任务处理
+    return await create_video_generation_task(
+        video_path, text, voice_index, output_path,
+        segments_mode, segments, subtitle_style, auto_split_config, quality_preset
+    )
+
+async def create_video_generation_task(
+    video_path: str, 
+    text: str = "", 
+    voice_index: int = 0, 
+    output_path: str = "output_video.mp4",
+    segments_mode: str = "keep",
+    segments: str = "",
+    subtitle_style: str = "",
+    auto_split_config: str = "",
+    quality_preset: str = "720p"
+) -> str:
+    """创建视频生成任务（异步）"""
+    task_id = str(uuid.uuid4())
+    
+    task = VideoGenerationTask(task_id, {
+        "video_path": video_path,
+        "text": text,
+        "voice_index": voice_index,
+        "output_path": output_path,
+        "segments_mode": segments_mode,
+        "segments": segments,
+        "subtitle_style": subtitle_style,
+        "auto_split_config": auto_split_config,
+        "quality_preset": quality_preset
+    })
+    
+    task_status[task_id] = task
+    
+    # 启动异步任务
+    asyncio.create_task(run_video_generation_task(task))
+    
+    return json.dumps({
+        "task_id": task_id,
+        "status": "created",
+        "message": "视频生成任务已创建，请使用 get_task_status 查询进度"
+    }, ensure_ascii=False)
+
+async def run_video_generation_task(task: VideoGenerationTask):
+    """运行视频生成任务"""
+    try:
+        task.status = "running"
+        task.start_time = datetime.now()
+        task.progress = 10
+        
+        # 执行视频生成
+        result = await generate_auto_video(
+            task.params["video_path"],
+            task.params["text"],
+            task.params["voice_index"],
+            task.params["output_path"],
+            task.params["segments_mode"],
+            task.params["segments"],
+            task.params["subtitle_style"],
+            task.params["auto_split_config"],
+            task.params["quality_preset"]
+        )
+        
+        task.progress = 100
+        task.status = "completed"
+        task.result = result
+        task.end_time = datetime.now()
+        
+    except Exception as e:
+        task.status = "failed"
+        task.error = str(e)
+        task.end_time = datetime.now()
+
+@mcp.tool()
+async def generate_auto_video_async(
+    video_path: Any, 
+    text: Any = "", 
+    voice_index: Any = 0, 
+    output_path: Any = "output_video.mp4",
+    segments_mode: Any = "keep",
+    segments: Any = "",
+    subtitle_style: Any = "",
+    auto_split_config: Any = "",
+    quality_preset: Any = "720p"
+) -> str:
+    """异步视频生成（推荐用于长时间任务）
+    
+    Args:
+        video_path: 视频文件路径（必传）
+        text: 要转换的文本（可选，为空时只进行视频处理）
+        voice_index: 语音音色索引 (0-4)
+        output_path: 输出视频路径
+        segments_mode: 视频片段模式 ("keep" 保留指定片段, "cut" 剪掉指定片段)
+        segments: 视频片段配置 (JSON字符串，格式: [{"start": "00:00:05", "end": "00:00:15"}])
+        subtitle_style: 字幕样式配置 (JSON字符串)
+        auto_split_config: 智能分割配置 (JSON字符串)
+        quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")
+        
+    Returns:
+        任务ID和状态信息
+    """
+    import json
+    # 保证所有复杂参数为字符串
+    if not isinstance(segments, str):
+        segments = json.dumps(segments, ensure_ascii=False)
+    if not isinstance(subtitle_style, str):
+        subtitle_style = json.dumps(subtitle_style, ensure_ascii=False)
+    if not isinstance(auto_split_config, str):
+        auto_split_config = json.dumps(auto_split_config, ensure_ascii=False)
+    
+    return await create_video_generation_task(
+        video_path, text, voice_index, output_path,
+        segments_mode, segments, subtitle_style, auto_split_config, quality_preset
+    )
+
+@mcp.tool()
+async def get_task_status(task_id: str) -> str:
+    """获取任务状态
+    
+    Args:
+        task_id: 任务ID
+        
+    Returns:
+        任务状态信息
+    """
+    if task_id not in task_status:
+        return json.dumps({
+            "error": "任务不存在",
+            "task_id": task_id
+        }, ensure_ascii=False)
+    
+    task = task_status[task_id]
+    
+    result = {
+        "task_id": task_id,
+        "status": task.status,
+        "progress": task.progress,
+        "created_at": task.created_at.isoformat(),
+        "start_time": task.start_time.isoformat() if task.start_time else None,
+        "end_time": task.end_time.isoformat() if task.end_time else None
+    }
+    
+    if task.status == "completed":
+        result["result"] = task.result
+    elif task.status == "failed":
+        result["error"] = task.error
+    
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+@mcp.tool()
+async def list_all_tasks() -> str:
+    """列出所有任务
+    
+    Returns:
+        所有任务列表
+    """
+    tasks = []
+    for task_id, task in task_status.items():
+        tasks.append({
+            "task_id": task_id,
+            "status": task.status,
+            "progress": task.progress,
+            "created_at": task.created_at.isoformat(),
+            "video_path": task.params.get("video_path", ""),
+            "text_length": len(task.params.get("text", ""))
+        })
+    
+    return json.dumps({
+        "total_tasks": len(tasks),
+        "tasks": tasks
+    }, ensure_ascii=False, indent=2)
+
+@mcp.tool()
+async def cancel_task(task_id: str) -> str:
+    """取消任务
+    
+    Args:
+        task_id: 任务ID
+        
+    Returns:
+        取消结果
+    """
+    if task_id not in task_status:
+        return json.dumps({
+            "error": "任务不存在",
+            "task_id": task_id
+        }, ensure_ascii=False)
+    
+    task = task_status[task_id]
+    if task.status in ["completed", "failed"]:
+        return json.dumps({
+            "error": "任务已完成或失败，无法取消",
+            "task_id": task_id,
+            "status": task.status
+        }, ensure_ascii=False)
+    
+    task.status = "cancelled"
+    task.end_time = datetime.now()
+    
+    return json.dumps({
+        "message": "任务已取消",
+        "task_id": task_id
+    }, ensure_ascii=False)
+
+@mcp.tool()
+async def generate_auto_video_sync(
+    video_path: Any, 
+    text: Any = "", 
+    voice_index: Any = 0, 
+    output_path: Any = "output_video.mp4",
+    segments_mode: Any = "keep",
+    segments: Any = "",
+    subtitle_style: Any = "",
+    auto_split_config: Any = "",
+    quality_preset: Any = "720p"
+) -> str:
+    """智能剪辑视频并自动添加字幕、语音（同步版本，适合短时间任务）
+    
+    Args:
+        video_path: 视频文件路径（必传）
+        text: 要转换的文本（可选，为空时只进行视频处理）
+        voice_index: 语音音色索引 (0-4)
+        output_path: 输出视频路径
+        segments_mode: 视频片段模式 ("keep" 保留指定片段, "cut" 剪掉指定片段)
+        segments: 视频片段配置 (JSON字符串，格式: [{"start": "00:00:05", "end": "00:00:15"}])
+        subtitle_style: 字幕样式配置 (JSON字符串)
+        auto_split_config: 智能分割配置 (JSON字符串)
+        quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")
+        
+    Returns:
+        生成结果信息（同步返回）
+    """
+    import json
+    # 保证所有复杂参数为字符串
+    if not isinstance(segments, str):
+        segments = json.dumps(segments, ensure_ascii=False)
+    if not isinstance(subtitle_style, str):
+        subtitle_style = json.dumps(subtitle_style, ensure_ascii=False)
+    if not isinstance(auto_split_config, str):
+        auto_split_config = json.dumps(auto_split_config, ensure_ascii=False)
+    
+    # 使用同步处理
     return await generate_auto_video(
-        video_path, text, voice_index, output_path, 
+        video_path, text, voice_index, output_path,
         segments_mode, segments, subtitle_style, auto_split_config, quality_preset
     ) 

@@ -22,26 +22,28 @@ mcp = FastMCP("auto-video-generator", log_level="INFO")
 # 核心功能工具
 @mcp.tool()
 async def generate_auto_video_mcp(
-    text: Any, 
     video_path: Any, 
+    text: Any = "", 
     voice_index: Any = 0, 
     output_path: Any = "output_video.mp4",
     segments_mode: Any = "keep",
     segments: Any = "",
     subtitle_style: Any = "",
-    auto_split_config: Any = ""
+    auto_split_config: Any = "",
+    quality_preset: Any = "720p"
 ) -> str:
     """智能剪辑视频并自动添加字幕、语音（主要功能）
     
     Args:
-        text: 要转换的文本
-        video_path: 视频文件路径
+        video_path: 视频文件路径（必传）
+        text: 要转换的文本（可选，为空时只进行视频处理）
         voice_index: 语音音色索引 (0-4)
         output_path: 输出视频路径
         segments_mode: 视频片段模式 ("keep" 保留指定片段, "cut" 剪掉指定片段)
         segments: 视频片段配置 (JSON字符串，格式: [{"start": "00:00:05", "end": "00:00:15"}])
         subtitle_style: 字幕样式配置 (JSON字符串)
         auto_split_config: 智能分割配置 (JSON字符串)
+        quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")
         
     Returns:
         生成结果信息
@@ -55,8 +57,8 @@ async def generate_auto_video_mcp(
     if not isinstance(auto_split_config, str):
         auto_split_config = json.dumps(auto_split_config, ensure_ascii=False)
     return await generate_auto_video(
-        text, video_path, voice_index, output_path, 
-        segments_mode, segments, subtitle_style, auto_split_config
+        video_path, text, voice_index, output_path, 
+        segments_mode, segments, subtitle_style, auto_split_config, quality_preset
     )
 
 # 配置获取工具
@@ -105,14 +107,22 @@ async def get_all_available_tools() -> str:
 示例："{5s}欢迎观看{5000ms}本视频由AI自动剪辑并添加智能字幕和语音解说。{2s}感谢您的观看！"
 
 === 参数说明 ===
-- text: 要转换的文本（必填）
-- video_path: 视频文件路径（必填）
+- video_path: 视频文件路径（必传）
+- text: 要转换的文本（可选，为空时只进行视频处理）
 - voice_index: 语音音色索引 0-4（可选，默认0）
 - output_path: 输出视频路径（可选，默认output_video.mp4）
 - segments_mode: 视频片段模式 "keep"或"cut"（可选，默认keep）
 - segments: 视频片段配置 JSON字符串（可选）
 - subtitle_style: 字幕样式配置 JSON字符串（可选）
 - auto_split_config: 智能分割配置 JSON字符串（可选）
+- quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")（可选，默认720p）
+
+=== 画质预设说明 ===
+- 240p: 低画质预览 (426x240, 500k) - 适合快速预览
+- 360p: 标清画质 (640x360, 800k) - 适合移动设备
+- 480p: 标准画质 (854x480, 1.2M) - 适合一般用途
+- 720p: 高清画质 (1280x720, 2M) - 默认设置
+- 1080p: 全高清 (1920x1080, 4M) - 最高质量
 
 === 智能分割配置 ===
 - 默认开启智能分割
@@ -133,6 +143,12 @@ async def get_all_available_tools() -> str:
 segments: '[{"start": "00:00:05", "end": "00:00:15"}]'
 subtitle_style: '{"fontSize": 60, "color": "yellow", "bgColor": [0, 0, 0, 128]}'
 auto_split_config: '{"enable": true, "strategy": "smart", "maxChars": 20}'
+
+=== 使用场景示例 ===
+1. 仅视频处理（无文本）: 设置text为空字符串
+2. 完整视频生成: 提供video_path和text
+3. 快速预览: 使用quality_preset="240p"
+4. 高质量输出: 使用quality_preset="1080p"
 """
     return tools_info
 

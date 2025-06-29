@@ -50,6 +50,13 @@ JSON对象格式，控制文本分割策略：
 }
 ```
 
+### quality_preset参数
+- `"240p"`: 低画质预览 (426x240, 500k) - 适合快速预览
+- `"360p"`: 标清画质 (640x360, 800k) - 适合移动设备
+- `"480p"`: 标准画质 (854x480, 1.2M) - 适合一般用途
+- `"720p"`: 高清画质 (1280x720, 2M) - 默认设置
+- `"1080p"`: 全高清 (1920x1080, 4M) - 最高质量
+
 ## 安装依赖
 
 ```bash
@@ -73,12 +80,54 @@ from auto_video_modules.mcp_tools import get_mcp_instance
 
 mcp = get_mcp_instance()
 
-# 基本视频生成
+# 基本视频生成（有文本）
 result = await mcp.call_tool("generate_auto_video", {
-    "text": "要转换的文本",
     "video_path": "input_video.mp4",
+    "text": "要转换的文本",
     "voice_index": 0,
     "output_path": "output_video.mp4"
+})
+
+# 仅视频处理（无文本）
+result = await mcp.call_tool("generate_auto_video", {
+    "video_path": "input_video.mp4",
+    "text": "",  # 空文本，只进行视频处理
+    "output_path": "processed_video.mp4"
+})
+```
+
+### 使用场景
+
+#### 1. 完整视频生成（推荐）
+当需要为视频添加语音解说和字幕时使用：
+```python
+result = await mcp.call_tool("generate_auto_video", {
+    "video_path": "input_video.mp4",
+    "text": "详细的解说文本内容",
+    "voice_index": 0,
+    "quality_preset": "720p"
+})
+```
+
+#### 2. 仅视频处理
+当只需要对视频进行剪辑、画质调整等处理时使用：
+```python
+result = await mcp.call_tool("generate_auto_video", {
+    "video_path": "input_video.mp4",
+    "text": "",  # 空文本
+    "segments_mode": "keep",
+    "segments": json.dumps([{"start": "00:00:10", "end": "00:00:30"}]),
+    "quality_preset": "480p"
+})
+```
+
+#### 3. 快速预览
+使用低画质快速生成预览版本：
+```python
+result = await mcp.call_tool("generate_auto_video", {
+    "video_path": "input_video.mp4",
+    "text": "预览文本",
+    "quality_preset": "240p"  # 低画质快速预览
 })
 ```
 
@@ -88,8 +137,8 @@ result = await mcp.call_tool("generate_auto_video", {
 ```python
 # 保留指定片段
 result = await mcp.call_tool("generate_auto_video", {
-    "text": "文本内容",
     "video_path": "input.mp4",
+    "text": "文本内容",
     "segments_mode": "keep",
     "segments": json.dumps([
         {"start": "00:00:05", "end": "00:00:15"},
@@ -99,8 +148,8 @@ result = await mcp.call_tool("generate_auto_video", {
 
 # 剪掉指定片段
 result = await mcp.call_tool("generate_auto_video", {
-    "text": "文本内容",
     "video_path": "input.mp4",
+    "text": "文本内容",
     "segments_mode": "cut",
     "segments": json.dumps([
         {"start": "00:00:10", "end": "00:00:20"}
@@ -111,8 +160,8 @@ result = await mcp.call_tool("generate_auto_video", {
 #### 自定义字幕样式
 ```python
 result = await mcp.call_tool("generate_auto_video", {
-    "text": "文本内容",
     "video_path": "input.mp4",
+    "text": "文本内容",
     "subtitle_style": json.dumps({
         "fontSize": 50,
         "color": "yellow",
@@ -127,8 +176,8 @@ result = await mcp.call_tool("generate_auto_video", {
 ```python
 # 智能分割
 result = await mcp.call_tool("generate_auto_video", {
-    "text": "文本内容",
     "video_path": "input.mp4",
+    "text": "文本内容",
     "auto_split_config": json.dumps({
         "enable": True,
         "strategy": "smart",
@@ -138,8 +187,8 @@ result = await mcp.call_tool("generate_auto_video", {
 
 # 按时长分割
 result = await mcp.call_tool("generate_auto_video", {
-    "text": "文本内容",
     "video_path": "input.mp4",
+    "text": "文本内容",
     "auto_split_config": json.dumps({
         "enable": True,
         "strategy": "duration",
@@ -151,8 +200,8 @@ result = await mcp.call_tool("generate_auto_video", {
 #### 完整配置示例
 ```python
 result = await mcp.call_tool("generate_auto_video", {
-    "text": "完整的视频生成示例",
     "video_path": "input.mp4",
+    "text": "完整的视频生成示例",
     "voice_index": 1,
     "output_path": "output.mp4",
     "segments_mode": "cut",
@@ -166,7 +215,8 @@ result = await mcp.call_tool("generate_auto_video", {
         "enable": True,
         "strategy": "duration",
         "targetDuration": 2.0
-    })
+    }),
+    "quality_preset": "720p"  # 画质预设: 240p, 360p, 480p, 720p, 1080p
 })
 ```
 
@@ -232,6 +282,13 @@ python test_auto_generate_video_modular.py
   - `"none"`: 不分割
 - `maxChars`: 每行最大字符数 (默认: 20)
 - `targetDuration`: 目标时长(秒) (默认: 3.0)
+
+### quality_preset参数
+- `"240p"`: 低画质预览 (426x240, 500k) - 适合快速预览
+- `"360p"`: 标清画质 (640x360, 800k) - 适合移动设备
+- `"480p"`: 标准画质 (854x480, 1.2M) - 适合一般用途
+- `"720p"`: 高清画质 (1280x720, 2M) - 默认设置
+- `"1080p"`: 全高清 (1920x1080, 4M) - 最高质量
 
 ## 注意事项
 

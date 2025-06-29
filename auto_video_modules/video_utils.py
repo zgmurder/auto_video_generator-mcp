@@ -574,7 +574,7 @@ def get_video_info(video_path):
     except Exception as e:
         return {"error": str(e)}
 
-def create_video_with_subtitles(video_path, audio_path, subtitle_segments, output_path, subtitle_style=None, subtitle_images=None):
+def create_video_with_subtitles(video_path, audio_path, subtitle_segments, output_path, subtitle_style=None, subtitle_images=None, quality_preset=None):
     """用PIL字幕图片合成带字幕视频
     
     Args:
@@ -584,11 +584,29 @@ def create_video_with_subtitles(video_path, audio_path, subtitle_segments, outpu
         output_path: 输出视频路径
         subtitle_style: 字幕样式配置
         subtitle_images: 预生成的字幕图片路径列表，如果为None则自动生成
+        quality_preset: 画质预设 (240p, 360p, 480p, 720p, 1080p)
     """
     try:
         # 加载视频和音频
         video = VideoFileClip(video_path)
         audio = AudioFileClip(audio_path)
+        
+        # 获取画质配置
+        from .config import get_config
+        config = get_config()
+        video_config = config.get_video_config()
+        
+        # 如果指定了画质预设，则应用画质配置
+        if quality_preset:
+            video_config.set_quality(quality_preset)
+            print(f"应用画质配置: {quality_preset}")
+        
+        # 获取目标分辨率和比特率
+        target_width, target_height = video_config.get_resolution_by_quality()
+        target_bitrate = video_config.get_bitrate_by_quality()
+        
+        print(f"目标分辨率: {target_width}x{target_height}")
+        print(f"目标比特率: {target_bitrate}")
         
         # 创建字幕剪辑
         subtitle_clips = []
@@ -606,9 +624,6 @@ def create_video_with_subtitles(video_path, audio_path, subtitle_segments, outpu
                         img_clip = ImageClip(subtitle_images[i]).set_position(('center', 'bottom')).set_duration(end_time - start_time).set_start(start_time)
                     subtitle_clips.append(img_clip)
                 elif text.strip():  # 如果有文本但没有预生成图片，则动态生成
-                    # 导入配置管理器
-                    from .config import get_config
-                    config = get_config()
                     subtitle_config = config.get_subtitle_config()
                     
                     # 解析字幕样式配置
@@ -626,7 +641,7 @@ def create_video_with_subtitles(video_path, audio_path, subtitle_segments, outpu
                         fontsize=font_size, 
                         color=color, 
                         font_path=font_path,
-                        size=(video.w, video.h),
+                        size=(target_width, target_height),
                         bg_color=bg_color,
                         subtitle_height=subtitle_height
                     )
@@ -634,8 +649,6 @@ def create_video_with_subtitles(video_path, audio_path, subtitle_segments, outpu
                     subtitle_clips.append(img_clip)
         else:
             # 动态生成字幕图片（原有逻辑）
-            from .config import get_config
-            config = get_config()
             subtitle_config = config.get_subtitle_config()
             
             if subtitle_style is None:
@@ -654,7 +667,7 @@ def create_video_with_subtitles(video_path, audio_path, subtitle_segments, outpu
                         fontsize=font_size, 
                         color=color, 
                         font_path=font_path,
-                        size=(video.w, video.h),
+                        size=(target_width, target_height),
                         bg_color=bg_color,
                         subtitle_height=subtitle_height
                     )
@@ -690,23 +703,34 @@ def create_video_with_subtitles(video_path, audio_path, subtitle_segments, outpu
             audio = AudioFileClip(trimmed_audio_path)
             print(f"截断后音频时长: {audio.duration:.2f} 秒")
         
-        # 生成无音频的视频文件
+        # 生成无音频的视频文件（应用画质配置）
         temp_video_path = "temp_video.mp4"
         print("正在生成无音频视频...")
-        video_with_subs.write_videofile(temp_video_path, codec='libx264', fps=24, audio=False)
+        video_with_subs.write_videofile(
+            temp_video_path, 
+            codec='libx264', 
+            fps=24, 
+            audio=False,
+            resize_algorithm='bicubic'
+        )
         
-        # 用ffmpeg合成，确保主轨道为视频，并加-to参数
+        # 用ffmpeg合成，应用画质配置
         print("正在使用ffmpeg合成音视频...")
         from .ffmpeg_utils import check_ffmpeg
         ffmpeg_path, _ = check_ffmpeg()
         audio_file_to_use = trimmed_audio_path if trimmed_audio_path else audio_path
+        
+        # 构建ffmpeg命令，应用画质配置
         cmd = [
             ffmpeg_path, "-y",
             "-i", temp_video_path,
             "-i", audio_file_to_use,
             "-map", "0:v:0", "-map", "1:a:0",
-            "-c:v", "copy",
+            "-c:v", "libx264",
+            "-b:v", target_bitrate,
+            "-s", f"{target_width}x{target_height}",
             "-c:a", "aac",
+            "-b:a", "128k",
             "-to", str(original_video_duration),
             output_path
         ]

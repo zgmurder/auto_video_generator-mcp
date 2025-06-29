@@ -8,6 +8,7 @@ import asyncio
 from mcp.server.fastmcp import FastMCP
 import json
 import subprocess
+from typing import Any
 
 # 导入各个模块
 from .ffmpeg_utils import setup_ffmpeg, get_mcp_instance as get_ffmpeg_mcp
@@ -115,40 +116,46 @@ async def generate_video_with_subtitles(text, video_path, voice_index=0, output_
 
 @mcp.tool()
 async def generate_auto_video(
-    text: str, 
     video_path: str, 
+    text: str = "", 
     voice_index: int = 0, 
     output_path: str = "output_video.mp4",
     segments_mode: str = "keep",
     segments: str = "",
     subtitle_style: str = "",
-    auto_split_config: str = ""
+    auto_split_config: str = "",
+    quality_preset: str = "720p"
 ) -> str:
     """自动生成带字幕的视频
     
     Args:
-        text: 要转换的文本
-        video_path: 视频文件路径
+        video_path: 视频文件路径（必传）
+        text: 要转换的文本（可选，为空时只进行视频处理）
         voice_index: 语音音色索引 (0-4)
         output_path: 输出视频路径
         segments_mode: 视频片段模式 ("keep" 保留指定片段, "cut" 剪掉指定片段)
         segments: 视频片段配置 (JSON字符串，格式: [{"start": "00:00:05", "end": "00:00:15"}])
         subtitle_style: 字幕样式配置 (JSON字符串)
         auto_split_config: 智能分割配置 (JSON字符串)
+        quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")
         
     Returns:
         生成结果信息
     """
     try:
         # 验证输入参数
-        if not text or not text.strip():
-            return "错误：文本内容不能为空"
-        
         if not os.path.exists(video_path):
             return f"错误：视频文件不存在: {video_path}"
         
         if voice_index < 0 or voice_index > 4:
             return "错误：语音音色索引无效，有效范围为 0-4"
+        
+        # 验证画质预设
+        valid_qualities = ["240p", "360p", "480p", "720p", "1080p"]
+        if quality_preset.lower() not in [q.lower() for q in valid_qualities]:
+            return f"错误：不支持的画质预设: {quality_preset}，支持: {valid_qualities}"
+        
+        print(f"使用画质预设: {quality_preset}")
         
         # 解析segments_mode
         if segments_mode not in ["keep", "cut"]:
@@ -199,30 +206,6 @@ async def generate_auto_video(
         # 设置FFmpeg
         setup_ffmpeg()
         
-        # 获取语音音色
-        voice = get_voice_by_index(voice_index)
-        
-        # 智能分割文本
-        if split_config.get("enabled", True):
-            from .subtitle_utils import split_timings
-            # 创建初始timing结构
-            initial_timing = [{"text": text, "duration": 0}]
-            timing = split_timings(
-                initial_timing,
-                max_chars=split_config.get("maxLength", 50),
-                min_chars=split_config.get("minLength", 5)
-            )
-            print(f"智能分割完成，共生成 {len(timing)} 个片段")
-        else:
-            # 不分割，整个文本作为一个片段
-            timing = [{"text": text, "duration": 0}]
-            print("智能分割已关闭，使用完整文本")
-        
-        # 生成音频和获取时长
-        tts_result = await synthesize_and_get_durations(timing, voice)
-        audio_path = tts_result["audio_path"]
-        segments_with_duration = tts_result["segments"]
-        
         # 获取视频信息
         from .video_utils import get_video_info
         video_info = get_video_info(video_path)
@@ -256,75 +239,149 @@ async def generate_auto_video(
         else:
             print("未指定视频片段，使用全部视频内容")
         
-        # 创建字幕图片 - 使用segments_with_duration确保与音频同步
-        subtitle_images = []
+        # 检查是否有文本需要处理
+        has_text = text and text.strip()
         
-        # 获取默认字幕配置
-        from .config import get_config
-        config = get_config()
-        subtitle_config_default = config.get_subtitle_config()
-        
-        # 使用配置中的默认值，如果用户提供了自定义配置则覆盖
-        font_path = subtitle_config.get('fontPath', subtitle_config_default.font_path)
-        font_size = subtitle_config.get('fontSize', subtitle_config_default.font_size)
-        color = subtitle_config.get('color', subtitle_config_default.font_color)
-        bg_color = tuple(subtitle_config.get('bgColor', subtitle_config_default.bg_color))
-        margin_x = subtitle_config.get('marginX', subtitle_config_default.margin_x)
-        margin_bottom = subtitle_config.get('marginBottom', subtitle_config_default.margin_bottom)
-        subtitle_height = subtitle_config.get('height', 100)
-        
-        # 使用segments_with_duration生成字幕图片，确保与音频同步
-        for i, segment in enumerate(segments_with_duration):
-            # 跳过空白静默片段，不生成字幕图片
-            if not segment["text"].strip():
-                subtitle_images.append(None)  # 标记为静默片段
-                continue
-                
-            # 使用create_subtitle_image_pil生成numpy数组
-            from .video_utils import create_subtitle_image_pil
-            img_array = create_subtitle_image_pil(
-                segment["text"], 
-                fontsize=font_size, 
-                color=color, 
-                font_path=font_path,
-                size=(video_info.get('width', 1920), video_info.get('height', 1080)),
-                bg_color=bg_color,
-                subtitle_height=subtitle_height
-            )
-            subtitle_images.append(img_array)
-        
-        # 创建带字幕的视频
-        # 生成 (text, start, end) 三元组列表
-        subtitle_tuples = []
-        cur_time = 0.0
-        for seg in segments_with_duration:
-            text = seg["text"]
-            duration = seg.get("duration", 0)
-            start = cur_time
-            end = cur_time + duration
-            subtitle_tuples.append((text, start, end))
-            cur_time = end
-        
-        # 创建视频
-        success = create_video_with_subtitles(clipped_video_path, audio_path, subtitle_tuples, output_path, subtitle_config, subtitle_images)
-        
-        # 清理临时文件 - 只清理音频文件，字幕图片是numpy数组不需要清理
-        temp_files = [audio_path]
-        if clipped_video_path != video_path and os.path.exists(clipped_video_path):
-            temp_files.append(clipped_video_path)
-        cleanup_temp_files(temp_files)
+        if has_text:
+            # 有文本时，进行文本转语音和字幕处理
+            print("检测到文本内容，开始文本转语音处理...")
+            
+            # 获取语音音色
+            voice = get_voice_by_index(voice_index)
+            
+            # 智能分割文本
+            if split_config.get("enabled", True):
+                from .subtitle_utils import split_timings
+                # 创建初始timing结构
+                initial_timing = [{"text": text, "duration": 0}]
+                timing = split_timings(
+                    initial_timing,
+                    max_chars=split_config.get("maxLength", 50),
+                    min_chars=split_config.get("minLength", 5)
+                )
+                print(f"智能分割完成，共生成 {len(timing)} 个片段")
+            else:
+                # 不分割，整个文本作为一个片段
+                timing = [{"text": text, "duration": 0}]
+                print("智能分割已关闭，使用完整文本")
+            
+            # 生成音频和获取时长
+            tts_result = await synthesize_and_get_durations(timing, voice)
+            audio_path = tts_result["audio_path"]
+            segments_with_duration = tts_result["segments"]
+            
+            # 创建字幕图片
+            subtitle_images = []
+            
+            # 获取默认字幕配置和画质配置
+            from .config import get_config
+            config = get_config()
+            subtitle_config_default = config.get_subtitle_config()
+            video_config = config.get_video_config()
+            
+            # 获取目标分辨率
+            target_width, target_height = video_config.get_resolution_by_quality(quality_preset)
+            print(f"目标分辨率: {target_width}x{target_height}")
+            
+            # 使用配置中的默认值，如果用户提供了自定义配置则覆盖
+            font_path = subtitle_config.get('fontPath', subtitle_config_default.font_path)
+            font_size = subtitle_config.get('fontSize', subtitle_config_default.font_size)
+            color = subtitle_config.get('color', subtitle_config_default.font_color)
+            bg_color = tuple(subtitle_config.get('bgColor', subtitle_config_default.bg_color))
+            margin_x = subtitle_config.get('marginX', subtitle_config_default.margin_x)
+            margin_bottom = subtitle_config.get('marginBottom', subtitle_config_default.margin_bottom)
+            subtitle_height = subtitle_config.get('height', 100)
+            
+            # 使用segments_with_duration生成字幕图片，确保与音频同步
+            for i, segment in enumerate(segments_with_duration):
+                # 跳过空白静默片段，不生成字幕图片
+                if not segment["text"].strip():
+                    subtitle_images.append(None)  # 标记为静默片段
+                    continue
+                    
+                # 使用create_subtitle_image_pil生成numpy数组
+                from .video_utils import create_subtitle_image_pil
+                img_array = create_subtitle_image_pil(
+                    segment["text"], 
+                    fontsize=font_size, 
+                    color=color, 
+                    font_path=font_path,
+                    size=(target_width, target_height),
+                    bg_color=bg_color,
+                    subtitle_height=subtitle_height
+                )
+                subtitle_images.append(img_array)
+            
+            # 创建带字幕的视频
+            # 生成 (text, start, end) 三元组列表
+            subtitle_tuples = []
+            cur_time = 0.0
+            for seg in segments_with_duration:
+                text = seg["text"]
+                duration = seg.get("duration", 0)
+                start = cur_time
+                end = cur_time + duration
+                subtitle_tuples.append((text, start, end))
+                cur_time = end
+            
+            # 创建视频（传递画质配置）
+            success = create_video_with_subtitles(clipped_video_path, audio_path, subtitle_tuples, output_path, subtitle_config, subtitle_images, quality_preset)
+            
+            # 清理临时文件
+            temp_files = [audio_path]
+            if clipped_video_path != video_path and os.path.exists(clipped_video_path):
+                temp_files.append(clipped_video_path)
+            cleanup_temp_files(temp_files)
+            
+        else:
+            # 没有文本时，只进行视频处理（剪辑、画质调整等）
+            print("未检测到文本内容，仅进行视频处理...")
+            
+            # 获取画质配置
+            from .config import get_config
+            config = get_config()
+            video_config = config.get_video_config()
+            
+            # 如果指定了画质预设，则应用画质配置
+            if quality_preset:
+                video_config.set_quality(quality_preset)
+                print(f"应用画质配置: {quality_preset}")
+            
+            # 获取目标分辨率和比特率
+            target_width, target_height = video_config.get_resolution_by_quality()
+            target_bitrate = video_config.get_bitrate_by_quality()
+            
+            print(f"目标分辨率: {target_width}x{target_height}")
+            print(f"目标比特率: {target_bitrate}")
+            
+            # 使用ffmpeg直接处理视频（无音频、无字幕）
+            from .ffmpeg_utils import check_ffmpeg
+            ffmpeg_path, _ = check_ffmpeg()
+            
+            cmd = [
+                ffmpeg_path, "-y",
+                "-i", clipped_video_path,
+                "-c:v", "libx264",
+                "-b:v", target_bitrate,
+                "-s", f"{target_width}x{target_height}",
+                "-c:a", "copy",  # 保持原音频
+                output_path
+            ]
+            
+            import subprocess
+            subprocess.run(cmd, check=True, capture_output=True)
+            print(f"视频处理完成: {output_path}")
+            success = True
         
         if success:
             # 获取输出视频信息
             output_info = get_video_info(output_path)
             absolute_output_path = os.path.abspath(output_path)
+            
             # 构建结果信息
             result = {
                 "status": "success",
                 "message": "视频生成成功",
-                "input_text_length": len(text),
-                "text_segments": len(timing),
-                "audio_segments": len(segments_with_duration),
                 "video_info": video_info,
                 "output_info": output_info,
                 "absolute_output_path": absolute_output_path,
@@ -332,9 +389,17 @@ async def generate_auto_video(
                     "segments_mode": segments_mode,
                     "segments_count": len(segments_list),
                     "subtitle_style": subtitle_config,
-                    "auto_split_config": split_config
+                    "auto_split_config": split_config,
+                    "quality_preset": quality_preset,
+                    "has_text": has_text
                 }
             }
+            
+            # 如果有文本处理，添加文本相关信息
+            if has_text:
+                result["input_text_length"] = len(text)
+                result["text_segments"] = len(timing) if 'timing' in locals() else 1
+                result["audio_segments"] = len(segments_with_duration) if 'segments_with_duration' in locals() else 0
             
             return json.dumps(result, ensure_ascii=False, indent=2)
         else:
@@ -539,233 +604,43 @@ def get_all_mcp_instances():
         "video": get_video_mcp()
     }
 
+@mcp.tool()
 async def generate_auto_video_mcp(
-    video_path: str,
-    text: str,
-    voice_index: int = 0,
-    output_path: str = "output.mp4",
-    segments_mode: str = "keep",
-    segments: str = "",
-    subtitle_style: str = "",
-    auto_split_config: str = ""
+    video_path: Any, 
+    text: Any = "", 
+    voice_index: Any = 0, 
+    output_path: Any = "output_video.mp4",
+    segments_mode: Any = "keep",
+    segments: Any = "",
+    subtitle_style: Any = "",
+    auto_split_config: Any = "",
+    quality_preset: Any = "720p"
 ) -> str:
-    """生成自动视频（MCP工具版本）
+    """智能剪辑视频并自动添加字幕、语音（主要功能）
     
     Args:
-        video_path: 视频文件路径
-        text: 要合成的文本内容
+        video_path: 视频文件路径（必传）
+        text: 要转换的文本（可选，为空时只进行视频处理）
         voice_index: 语音音色索引 (0-4)
         output_path: 输出视频路径
-        segments_mode: 片段模式 ('keep' 或 'cut')
-        segments: 视频片段配置 JSON字符串
-        subtitle_style: 字幕样式配置 JSON字符串
-        auto_split_config: 智能分割配置 JSON字符串（默认开启）
+        segments_mode: 视频片段模式 ("keep" 保留指定片段, "cut" 剪掉指定片段)
+        segments: 视频片段配置 (JSON字符串，格式: [{"start": "00:00:05", "end": "00:00:15"}])
+        subtitle_style: 字幕样式配置 (JSON字符串)
+        auto_split_config: 智能分割配置 (JSON字符串)
+        quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")
         
     Returns:
-        str: 处理结果
+        生成结果信息
     """
-    try:
-        # 验证视频文件
-        if not os.path.exists(video_path):
-            return f"错误：视频文件不存在: {video_path}"
-        
-        # 解析智能分割配置（默认开启）
-        split_config = {}
-        if auto_split_config:
-            try:
-                split_config = json.loads(auto_split_config)
-            except json.JSONDecodeError:
-                return "错误：智能分割配置JSON格式错误"
-        else:
-            # 默认开启智能分割
-            from .config import get_config
-            config = get_config()
-            auto_split_default = config.get_auto_split_config()
-            split_config = {
-                "enabled": True,
-                "maxLength": auto_split_default.max_length,
-                "minLength": auto_split_default.min_length,
-                "splitChars": auto_split_default.split_chars,
-                "preservePunctuation": auto_split_default.preserve_punctuation
-            }
-        
-        # 智能分割文本
-        if split_config.get("enabled", True):
-            from .subtitle_utils import split_timings
-            # 创建初始timing结构
-            initial_timing = [{"text": text, "duration": 0}]
-            timing = split_timings(
-                initial_timing,
-                max_chars=split_config.get("maxLength", 50),
-                min_chars=split_config.get("minLength", 5)
-            )
-            print(f"智能分割完成，共生成 {len(timing)} 个片段")
-        else:
-            # 不分割，整个文本作为一个片段
-            timing = [{"text": text, "duration": 0}]
-            print("智能分割已关闭，使用完整文本")
-        
-        # 验证输入参数
-        if not text or not text.strip():
-            return "错误：文本内容不能为空"
-        
-        if not os.path.exists(video_path):
-            return f"错误：视频文件不存在: {video_path}"
-        
-        if voice_index < 0 or voice_index > 4:
-            return "错误：语音音色索引无效，有效范围为 0-4"
-        
-        # 解析segments_mode
-        if segments_mode not in ["keep", "cut"]:
-            return "错误：segments_mode 参数无效，支持 'keep' 或 'cut'"
-        
-        # 解析segments配置
-        segments_list = []
-        if segments:
-            try:
-                segments_list = json.loads(segments)
-                if not isinstance(segments_list, list):
-                    return "错误：segments 参数格式错误，应为JSON数组"
-            except json.JSONDecodeError:
-                return "错误：segments 参数JSON格式错误"
-        
-        # 解析subtitle_style配置
-        subtitle_config = {}
-        if subtitle_style:
-            try:
-                subtitle_config = json.loads(subtitle_style)
-                if not isinstance(subtitle_config, dict):
-                    return "错误：subtitle_style 参数格式错误，应为JSON对象"
-            except json.JSONDecodeError:
-                return "错误：subtitle_style 参数JSON格式错误"
-        
-        # 设置FFmpeg
-        setup_ffmpeg()
-        
-        # 获取语音音色
-        voice = get_voice_by_index(voice_index)
-        
-        # 生成音频和获取时长
-        tts_result = await synthesize_and_get_durations(timing, voice)
-        audio_path = tts_result["audio_path"]
-        segments_with_duration = tts_result["segments"]
-        
-        # 获取视频信息
-        from .video_utils import get_video_info
-        video_info = get_video_info(video_path)
-        
-        # 处理视频片段剪辑
-        clipped_video_path = video_path  # 默认使用原视频
-        if segments_list:
-            from .video_utils import parse_video_segments, clip_video_segments
-            video_duration = video_info.get('duration', 0)
-            keep_intervals = parse_video_segments(segments_list, video_duration, segments_mode)
-            
-            # 执行视频剪辑
-            try:
-                print(f"开始视频片段剪辑 - 模式: {segments_mode}, 片段数: {len(segments_list)}")
-                final_clip = clip_video_segments(video_path, keep_intervals)
-                
-                # 保存剪辑后的视频到临时文件
-                clipped_video_path = "temp_clipped_video.mp4"
-                final_clip.write_videofile(clipped_video_path, codec='libx264', fps=24, audio=False)
-                final_clip.close()
-                
-                print(f"视频剪辑完成，保存到: {clipped_video_path}")
-                
-                # 更新视频信息
-                from .video_utils import get_video_info
-                video_info = get_video_info(clipped_video_path)
-                
-            except Exception as e:
-                print(f"视频剪辑失败，使用原视频: {e}")
-                clipped_video_path = video_path
-        else:
-            print("未指定视频片段，使用全部视频内容")
-        
-        # 创建字幕图片 - 使用segments_with_duration确保与音频同步
-        subtitle_images = []
-        
-        # 获取默认字幕配置
-        from .config import get_config
-        config = get_config()
-        subtitle_config_default = config.get_subtitle_config()
-        
-        # 使用配置中的默认值，如果用户提供了自定义配置则覆盖
-        font_path = subtitle_config.get('fontPath', subtitle_config_default.font_path)
-        font_size = subtitle_config.get('fontSize', subtitle_config_default.font_size)
-        color = subtitle_config.get('color', subtitle_config_default.font_color)
-        bg_color = tuple(subtitle_config.get('bgColor', subtitle_config_default.bg_color))
-        margin_x = subtitle_config.get('marginX', subtitle_config_default.margin_x)
-        margin_bottom = subtitle_config.get('marginBottom', subtitle_config_default.margin_bottom)
-        subtitle_height = subtitle_config.get('height', 100)
-        
-        # 使用segments_with_duration生成字幕图片，确保与音频同步
-        for i, segment in enumerate(segments_with_duration):
-            # 跳过空白静默片段，不生成字幕图片
-            if not segment["text"].strip():
-                subtitle_images.append(None)  # 标记为静默片段
-                continue
-                
-            # 使用create_subtitle_image_pil生成numpy数组
-            from .video_utils import create_subtitle_image_pil
-            img_array = create_subtitle_image_pil(
-                segment["text"], 
-                fontsize=font_size, 
-                color=color, 
-                font_path=font_path,
-                size=(video_info.get('width', 1920), video_info.get('height', 1080)),
-                bg_color=bg_color,
-                subtitle_height=subtitle_height
-            )
-            subtitle_images.append(img_array)
-        
-        # 创建带字幕的视频
-        # 生成 (text, start, end) 三元组列表
-        subtitle_tuples = []
-        cur_time = 0.0
-        for seg in segments_with_duration:
-            text = seg["text"]
-            duration = seg.get("duration", 0)
-            start = cur_time
-            end = cur_time + duration
-            subtitle_tuples.append((text, start, end))
-            cur_time = end
-        
-        # 创建视频
-        success = create_video_with_subtitles(clipped_video_path, audio_path, subtitle_tuples, output_path, subtitle_config, subtitle_images)
-        
-        # 清理临时文件 - 只清理音频文件，字幕图片是numpy数组不需要清理
-        temp_files = [audio_path]
-        if clipped_video_path != video_path and os.path.exists(clipped_video_path):
-            temp_files.append(clipped_video_path)
-        cleanup_temp_files(temp_files)
-        
-        if success:
-            # 获取输出视频信息
-            output_info = get_video_info(output_path)
-            absolute_output_path = os.path.abspath(output_path)
-            # 构建结果信息
-            result = {
-                "status": "success",
-                "message": "视频生成成功",
-                "input_text_length": len(text),
-                "text_segments": len(timing),
-                "audio_segments": len(segments_with_duration),
-                "video_info": video_info,
-                "output_info": output_info,
-                "absolute_output_path": absolute_output_path,
-                "config_used": {
-                    "segments_mode": segments_mode,
-                    "segments_count": len(segments_list),
-                    "subtitle_style": subtitle_config,
-                    "auto_split_config": split_config
-                }
-            }
-            
-            return json.dumps(result, ensure_ascii=False, indent=2)
-        else:
-            return "错误：视频生成失败"
-        
-    except Exception as e:
-        return f"错误：生成视频时发生异常 - {str(e)}" 
+    import json
+    # 保证所有复杂参数为字符串
+    if not isinstance(segments, str):
+        segments = json.dumps(segments, ensure_ascii=False)
+    if not isinstance(subtitle_style, str):
+        subtitle_style = json.dumps(subtitle_style, ensure_ascii=False)
+    if not isinstance(auto_split_config, str):
+        auto_split_config = json.dumps(auto_split_config, ensure_ascii=False)
+    return await generate_auto_video(
+        video_path, text, voice_index, output_path, 
+        segments_mode, segments, subtitle_style, auto_split_config, quality_preset
+    ) 

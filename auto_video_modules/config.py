@@ -54,6 +54,65 @@ class VideoConfig:
     bitrate: str = "2M"
     output_format: str = "mp4"
     temp_dir: str = "temp"
+    quality_preset: str = "720p"  # 画质预设: 240p, 360p, 480p, 720p, 1080p
+    
+    def get_resolution_by_quality(self, quality: str = None) -> tuple:
+        """根据画质预设获取分辨率
+        
+        Args:
+            quality: 画质预设，如果为None则使用当前配置
+            
+        Returns:
+            tuple: (width, height) 分辨率
+        """
+        quality = quality or self.quality_preset
+        
+        quality_map = {
+            "240p": (426, 240),
+            "360p": (640, 360),
+            "480p": (854, 480),
+            "720p": (1280, 720),
+            "1080p": (1920, 1080)
+        }
+        
+        return quality_map.get(quality.lower(), (1280, 720))
+    
+    def get_bitrate_by_quality(self, quality: str = None) -> str:
+        """根据画质预设获取比特率
+        
+        Args:
+            quality: 画质预设，如果为None则使用当前配置
+            
+        Returns:
+            str: 比特率字符串
+        """
+        quality = quality or self.quality_preset
+        
+        bitrate_map = {
+            "240p": "500k",
+            "360p": "800k",
+            "480p": "1.2M",
+            "720p": "2M",
+            "1080p": "4M"
+        }
+        
+        return bitrate_map.get(quality.lower(), "2M")
+    
+    def set_quality(self, quality: str):
+        """设置画质预设
+        
+        Args:
+            quality: 画质预设 (240p, 360p, 480p, 720p, 1080p)
+        """
+        valid_qualities = ["240p", "360p", "480p", "720p", "1080p"]
+        if quality.lower() not in [q.lower() for q in valid_qualities]:
+            raise ValueError(f"不支持的画质: {quality}，支持: {valid_qualities}")
+        
+        self.quality_preset = quality.lower()
+        width, height = self.get_resolution_by_quality(quality)
+        self.width = width
+        self.height = height
+        self.bitrate = self.get_bitrate_by_quality(quality)
 
 @dataclass
 class SystemConfig:

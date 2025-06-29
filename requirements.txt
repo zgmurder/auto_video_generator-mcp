@@ -1,0 +1,17 @@
+# 核心依赖
+httpx>=0.24.0
+fastmcp>=0.1.0
+
+# 音频处理
+azure-cognitiveservices-speech>=1.31.0
+pydub>=0.25.1
+
+# 视频处理
+moviepy>=1.0.3
+opencv-python>=4.8.0
+
+# 图像处理
+Pillow>=10.0.0
+
+# 文本处理
+jieba>=0.42.1 

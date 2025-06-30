@@ -1,400 +1,301 @@
-# 自动视频生成MCP服务器
+﻿# Auto Video Generator MCP
 
-这是一个基于FastMCP框架的自动视频生成服务器，支持文本转语音、视频剪辑、字幕生成和音视频合成。
+一个基于 MCP (Model Context Protocol) 的智能视频生成系统，支持自动添加字幕、语音合成和视频剪辑功能。
 
-## 🆕 新增功能：异步任务管理
-
-为了解决大模型调用时因视频生成时间长而导致的连接超时问题，我们新增了异步任务管理功能，**现在默认使用异步任务处理**：
-
-### 异步功能特性
-- **长时间任务处理**：避免连接超时，支持后台处理
-- **任务状态查询**：实时监控任务进度
-- **并发任务支持**：支持多个任务同时运行
-- **任务取消功能**：可取消正在运行的任务
-
-### 默认使用异步任务
-现在调用 `generate_auto_video_mcp` 会自动使用异步任务处理，避免连接超时：
-
-```python
-# 默认使用异步任务（推荐）
-result = await mcp.call_tool("generate_auto_video_mcp", {
-    "video_path": "input_video.mp4",
-    "text": "视频内容",
-    "voice_index": 0
-})
-
-# 返回任务ID，需要查询状态
-task_info = json.loads(result)
-task_id = task_info["task_id"]
-
-# 查询任务状态
-status_result = await mcp.call_tool("get_task_status", {
-    "task_id": task_id
-})
-```
-
-### 同步版本（适合短时间任务）
-如果需要同步处理短时间任务，可以使用：
-
-```python
-# 同步版本（适合短时间任务）
-result = await mcp.call_tool("generate_auto_video_sync", {
-    "video_path": "input_video.mp4",
-    "text": "短文本内容",
-    "voice_index": 0
-})
-
-# 直接返回结果
-print(result)
-```
-
-详细使用指南请参考 [ASYNC_USAGE.md](ASYNC_USAGE.md)
-
-## 功能特性
+##  功能特性
 
 ### 核心功能
-- **文本转语音**: 支持多种中文语音音色
-- **智能字幕分割**: 支持多种分割策略
-- **视频片段剪辑**: 支持保留或剪掉指定片段
-- **字幕样式定制**: 支持字体、颜色、位置等自定义
-- **音视频合成**: 自动合成带字幕的视频
+- **智能视频剪辑**: 支持视频片段保留/剪切模式
+- **自动字幕生成**: 智能文本分割和字幕样式自定义
+- **语音合成**: 集成 Azure 语音服务，支持多种音色
+- **多画质输出**: 支持 240p 到 1080p 多种画质预设
+- **异步任务处理**: 支持长时间任务的异步处理
+- **时间标记控制**: 支持在文本中使用时间标记控制静默时间
 
-### 配置参数
+### 技术特性
+- **模块化架构**: 清晰的模块分离，易于维护和扩展
+- **MCP 协议**: 基于 FastMCP 的标准化接口
+- **配置管理**: 灵活的配置系统，支持环境变量
+- **任务管理**: 完整的任务状态跟踪和管理
+- **临时文件清理**: 自动清理处理过程中的临时文件
 
-#### 1. segments_mode (视频片段模式)
-- `"keep"`: 保留指定片段
-- `"cut"`: 剪掉指定片段
+##  系统要求
 
-#### 2. segments (视频片段配置)
-JSON数组格式，指定视频片段的时间区间：
-```json
-[
-  {"start": "00:00:05", "end": "00:00:15"},
-  {"start": "00:00:25", "end": "00:00:35"}
-]
-```
+### 软件依赖
+- Python 3.8+
+- FFmpeg (需要预先安装并配置到系统 PATH)
+- Windows 系统 (字体路径配置)
 
-#### 3. subtitle_style (字幕样式配置)
-JSON对象格式，自定义字幕外观：
-```json
-{
-  "fontSize": 40,
-  "color": "white",
-  "bgColor": [0, 0, 0, 128],
-  "marginX": 100,
-  "marginBottom": 50,
-  "fontPath": "arial.ttf"
-}
-```
+### Python 依赖
+\\\
+httpx>=0.24.0
+fastmcp>=0.1.0
+azure-cognitiveservices-speech>=1.31.0
+pydub>=0.25.1
+moviepy>=1.0.3
+opencv-python>=4.8.0
+Pillow>=10.0.0
+jieba>=0.42.1
+\\\
 
-#### 4. auto_split_config (智能分割配置)
-JSON对象格式，控制文本分割策略：
-```json
-{
-  "enable": true,
-  "strategy": "smart",
-  "maxChars": 20,
-  "targetDuration": 3.0
-}
-```
+##  安装配置
 
-### quality_preset参数
-- `"240p"`: 低画质预览 (426x240, 500k) - 适合快速预览
-- `"360p"`: 标清画质 (640x360, 800k) - 适合移动设备
-- `"480p"`: 标准画质 (854x480, 1.2M) - 适合一般用途
-- `"720p"`: 高清画质 (1280x720, 2M) - 默认设置
-- `"1080p"`: 全高清 (1920x1080, 4M) - 最高质量
+### 1. 克隆项目
+\\\ash
+git clone <repository-url>
+cd auto-video-generator-mcp
+\\\
 
-## 安装依赖
-
-```bash
+### 2. 安装依赖
+\\\ash
 pip install -r requirements.txt
-```
+\\\
 
-## 使用方法
+### 3. 配置环境变量
+\\\ash
+# Azure 语音服务配置
+export AZURE_SPEECH_KEY="your_azure_speech_key"
+export AZURE_SPEECH_REGION="eastasia"
 
-### 1. 启动MCP服务器
+# FFmpeg 路径配置 (可选)
+export FFMPEG_PATH="path/to/ffmpeg"
+export FFPROBE_PATH="path/to/ffprobe"
 
-```bash
+# 调试模式 (可选)
+export DEBUG_MODE="true"
+\\\
+
+### 4. 启动服务器
+\\\ash
 python auto_generate_video_mcp_modular.py
-```
+\\\
 
-服务器将在端口8000上启动，支持SSE传输。
+服务器将在 \http://localhost:8000/sse\ 启动。
 
-### 2. 基本使用
+##  使用指南
 
-```python
-from auto_video_modules.mcp_tools import get_mcp_instance
+### 基本使用
 
-mcp = get_mcp_instance()
+#### 1. 简单视频生成
+\\\python
+# 生成带字幕和语音的视频
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    text="欢迎观看本视频，这是AI自动生成的解说。",
+    voice_index=0,
+    output_path="output.mp4"
+)
+\\\
 
-# 默认使用异步任务（推荐）
-result = await mcp.call_tool("generate_auto_video_mcp", {
-    "video_path": "input_video.mp4",
-    "text": "要转换的文本",
-    "voice_index": 0,
-    "output_path": "output_video.mp4"
-})
+#### 2. 自定义画质
+\\\python
+# 生成高清视频
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    text="高清视频内容",
+    quality_preset="1080p"
+)
+\\\
 
-# 解析任务ID
-import json
-task_info = json.loads(result)
-task_id = task_info["task_id"]
+#### 3. 视频片段处理
+\\\python
+# 保留指定片段
+segments = '[{"start": "00:00:05", "end": "00:00:15"}]'
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    text="片段解说",
+    segments_mode="keep",
+    segments=segments
+)
+\\\
+
+### 高级功能
+
+#### 1. 时间标记控制
+\\\python
+# 使用时间标记控制静默时间
+text = "{5s}欢迎观看{5000ms}本视频由AI自动剪辑并添加智能字幕和语音解说。{2s}感谢您的观看！"
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    text=text
+)
+\\\
+
+#### 2. 自定义字幕样式
+\\\python
+subtitle_style = '{"fontSize": 60, "color": "yellow", "bgColor": [0, 0, 0, 128]}'
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    text="自定义字幕样式",
+    subtitle_style=subtitle_style
+)
+\\\
+
+#### 3. 异步任务处理
+\\\python
+# 创建异步任务
+task_id = await generate_auto_video_async(
+    video_path="input.mp4",
+    text="长时间处理任务"
+)
 
 # 查询任务状态
-while True:
-    status_result = await mcp.call_tool("get_task_status", {
-        "task_id": task_id
-    })
-    
-    status_info = json.loads(status_result)
-    if status_info['status'] == 'completed':
-        print("任务完成！")
-        print(f"结果: {status_info['result']}")
-        break
-    elif status_info['status'] == 'failed':
-        print(f"任务失败: {status_info['error']}")
-        break
-    
-    await asyncio.sleep(5)  # 等待5秒后再次查询
+status = await get_task_status(task_id)
 
-# 同步版本（适合短时间任务）
-result = await mcp.call_tool("generate_auto_video_sync", {
-    "video_path": "input_video.mp4",
-    "text": "短文本内容",
-    "output_path": "sync_output.mp4"
-})
+# 取消任务
+await cancel_task(task_id)
+\\\
 
-print(result)  # 直接返回结果
-```
+##  配置说明
 
-### 使用场景
+### 画质预设
+| 预设 | 分辨率 | 比特率 | 适用场景 |
+|------|--------|--------|----------|
+| 240p | 426240 | 500k | 快速预览 |
+| 360p | 640360 | 800k | 移动设备 |
+| 480p | 854480 | 1.2M | 一般用途 |
+| 720p | 1280720 | 2M | 默认设置 |
+| 1080p | 19201080 | 4M | 最高质量 |
 
-#### 1. 完整视频生成（推荐，默认异步）
-当需要为视频添加语音解说和字幕时使用：
-```python
-result = await mcp.call_tool("generate_auto_video_mcp", {
-    "video_path": "input_video.mp4",
-    "text": "详细的解说文本内容",
-    "voice_index": 0,
-    "quality_preset": "720p"
-})
+### 语音音色
+- \oice_index=0\: zh-CN-XiaoxiaoNeural (默认)
+- \oice_index=1-4\: 其他 Azure 语音音色
 
-# 处理异步任务
-task_info = json.loads(result)
-task_id = task_info["task_id"]
-# ... 查询任务状态
-```
+### 字幕样式配置
+\\\json
+{
+    "fontSize": 50,
+    "color": "white",
+    "bgColor": [0, 0, 0, 30],
+    "fontPath": "C:\\\\Windows\\\\Fonts\\\\msyh.ttc",
+    "marginX": 100,
+    "marginBottom": 50
+}
+\\\
 
-#### 2. 仅视频处理（默认异步）
-当只需要对视频进行剪辑、画质调整等处理时使用：
-```python
-result = await mcp.call_tool("generate_auto_video_mcp", {
-    "video_path": "input_video.mp4",
-    "text": "",  # 空文本
-    "segments_mode": "keep",
-    "segments": json.dumps([{"start": "00:00:10", "end": "00:00:30"}]),
-    "quality_preset": "480p"
-})
+##  API 接口
 
-# 处理异步任务
-task_info = json.loads(result)
-task_id = task_info["task_id"]
-# ... 查询任务状态
-```
+### 核心功能接口
 
-#### 3. 快速预览（同步版本）
-使用低画质快速生成预览版本：
-```python
-result = await mcp.call_tool("generate_auto_video_sync", {
-    "video_path": "input_video.mp4",
-    "text": "预览文本",
-    "quality_preset": "240p"  # 低画质快速预览
-})
+#### \generate_auto_video_mcp\
+主要视频生成接口，支持异步任务处理。
 
-print(result)  # 直接返回结果
-```
+**参数:**
+- \ideo_path\ (str): 视频文件路径 (必传)
+- \	ext\ (str): 要转换的文本 (可选)
+- \oice_index\ (int): 语音音色索引 0-4 (默认: 0)
+- \output_path\ (str): 输出视频路径 (默认: "output_video.mp4")
+- \segments_mode\ (str): 视频片段模式 "keep" 或 "cut" (默认: "keep")
+- \segments\ (str): 视频片段配置 JSON 字符串 (可选)
+- \subtitle_style\ (str): 字幕样式配置 JSON 字符串 (可选)
+- \uto_split_config\ (str): 智能分割配置 JSON 字符串 (可选)
+- \quality_preset\ (str): 画质预设 (默认: "720p")
 
-### 3. 高级配置示例
+#### \generate_auto_video_sync\
+同步视频生成接口，适合短时间任务。
 
-#### 视频片段剪辑
-```python
-# 保留指定片段（默认异步）
-result = await mcp.call_tool("generate_auto_video_mcp", {
-    "video_path": "input.mp4",
-    "text": "文本内容",
-    "segments_mode": "keep",
-    "segments": json.dumps([
-        {"start": "00:00:05", "end": "00:00:15"},
-        {"start": "00:00:25", "end": "00:00:35"}
-    ])
-})
+#### \generate_auto_video_async\
+异步视频生成接口，适合长时间任务。
 
-# 处理异步任务
-task_info = json.loads(result)
-task_id = task_info["task_id"]
-# ... 查询任务状态
+### 任务管理接口
 
-# 剪掉指定片段（默认异步）
-result = await mcp.call_tool("generate_auto_video_mcp", {
-    "video_path": "input.mp4",
-    "text": "文本内容",
-    "segments_mode": "cut",
-    "segments": json.dumps([
-        {"start": "00:00:10", "end": "00:00:20"}
-    ])
-})
+#### \get_task_status(task_id)\
+获取任务状态和进度信息。
 
-# 处理异步任务
-task_info = json.loads(result)
-task_id = task_info["task_id"]
-# ... 查询任务状态
-```
+#### \list_all_tasks()\
+列出所有任务及其状态。
 
-#### 自定义字幕样式
-```python
-result = await mcp.call_tool("generate_auto_video_mcp", {
-    "video_path": "input.mp4",
-    "text": "文本内容",
-    "subtitle_style": json.dumps({
-        "fontSize": 50,
-        "color": "yellow",
-        "bgColor": [0, 0, 0, 128],
-        "marginX": 150,
-        "marginBottom": 80
-    })
-})
+#### \cancel_task(task_id)\
+取消正在运行的任务。
 
-# 处理异步任务
-task_info = json.loads(result)
-task_id = task_info["task_id"]
-# ... 查询任务状态
-```
+### 配置查询接口
 
-#### 智能文本分割
-```python
-# 智能分割（默认异步）
-result = await mcp.call_tool("generate_auto_video_mcp", {
-    "video_path": "input.mp4",
-    "text": "文本内容",
-    "auto_split_config": json.dumps({
-        "enable": True,
-        "strategy": "smart",
-        "maxChars": 15
-    })
-})
+#### \get_system_status()\
+获取系统状态信息。
 
-# 处理异步任务
-task_info = json.loads(result)
-task_id = task_info["task_id"]
-# ... 查询任务状态
+#### \get_available_voice_options()\
+获取可用的语音选项。
 
-# 按时长分割（默认异步）
-result = await mcp.call_tool("generate_auto_video_mcp", {
-    "video_path": "input.mp4",
-    "text": "文本内容",
-    "auto_split_config": json.dumps({
-        "enable": True,
-        "strategy": "duration",
-        "targetDuration": 2.0
-    })
-})
+#### \alidate_input_parameters(text, video_path, voice_index)\
+验证输入参数的有效性。
 
-# 处理异步任务
-task_info = json.loads(result)
-task_id = task_info["task_id"]
-# ... 查询任务状态
-```
+#### \get_generation_estimate(text, video_path)\
+获取生成时间估算。
 
-## 可用工具
+##  项目结构
 
-### 主要工具
-- `generate_auto_video`: 自动生成带字幕的视频
-- `get_system_status`: 获取系统状态
-- `get_available_voice_options`: 获取可用语音选项
-- `validate_input_parameters`: 验证输入参数
-- `get_generation_estimate`: 获取生成时间估算
+\\\
+auto-video-generator-mcp/
+ auto_generate_video_mcp_modular.py  # 主服务器文件
+ auto_video_modules/                 # 核心模块目录
+    __init__.py                     # 模块初始化
+    config.py                       # 配置管理
+    ffmpeg_utils.py                 # FFmpeg 工具
+    mcp_tools.py                    # MCP 工具接口
+    subtitle_utils.py               # 字幕处理
+    video_utils.py                  # 视频处理
+    voice_utils.py                  # 语音处理
+ requirements.txt                    # Python 依赖
+ README.md                          # 项目文档
+\\\
 
-### 模块化工具
-- **FFmpeg工具**: 视频处理相关
-- **语音工具**: 语音音色管理
-- **音频工具**: 文本转语音
-- **字幕工具**: 字幕生成和处理
-- **视频工具**: 视频剪辑和合成
-
-## 测试
-
-运行测试脚本：
-
-```bash
-python test_auto_generate_video_modular.py
-```
-
-测试包括：
-- 各模块功能测试
-- 配置参数测试
-- 完整视频生成测试
-- 系统工具测试
-
-## 配置参数详解
-
-### segments_mode
-- **keep**: 保留模式，只使用segments中指定的视频片段
-- **cut**: 剪掉模式，使用segments之外的视频片段
-
-### segments格式
-```json
-[
-  {
-    "start": "HH:MM:SS",  // 开始时间
-    "end": "HH:MM:SS"     // 结束时间
-  }
-]
-```
-
-### subtitle_style参数
-- `fontSize`: 字体大小 (默认: 40)
-- `color`: 字体颜色 (默认: "white")
-- `bgColor`: 背景颜色 [R,G,B,A] (默认: [0,0,0,0])
-- `marginX`: 左右边距 (默认: 100)
-- `marginBottom`: 底部边距 (默认: 50)
-- `fontPath`: 字体文件路径 (默认: "arial.ttf")
-
-### auto_split_config参数
-- `enable`: 是否启用智能分割 (默认: true)
-- `strategy`: 分割策略
-  - `"smart"`: 智能分割 (按句子、逗号、字符数)
-  - `"duration"`: 按时长分割
-  - `"none"`: 不分割
-- `maxChars`: 每行最大字符数 (默认: 20)
-- `targetDuration`: 目标时长(秒) (默认: 3.0)
-
-### quality_preset参数
-- `"240p"`: 低画质预览 (426x240, 500k) - 适合快速预览
-- `"360p"`: 标清画质 (640x360, 800k) - 适合移动设备
-- `"480p"`: 标准画质 (854x480, 1.2M) - 适合一般用途
-- `"720p"`: 高清画质 (1280x720, 2M) - 默认设置
-- `"1080p"`: 全高清 (1920x1080, 4M) - 最高质量
-
-## 注意事项
-
-1. 确保系统已安装FFmpeg
-2. 视频文件格式支持: MP4, AVI, MOV等
-3. 音频文件格式支持: MP3, WAV等
-4. 字幕支持中文和英文
-5. 建议使用较短的文本片段以获得更好的效果
-
-## 故障排除
+##  故障排除
 
 ### 常见问题
-1. **FFmpeg未找到**: 请安装FFmpeg并确保在PATH中
-2. **字体文件未找到**: 使用系统默认字体或指定正确的字体路径
-3. **视频生成失败**: 检查输入视频文件格式和路径
-4. **音频合成失败**: 检查网络连接和语音服务
+
+#### 1. FFmpeg 未找到
+**错误**: \FFmpeg not found in system PATH\
+**解决**: 确保 FFmpeg 已安装并添加到系统 PATH，或设置 \FFMPEG_PATH\ 环境变量。
+
+#### 2. Azure 语音服务错误
+**错误**: \Azure Speech Service authentication failed\
+**解决**: 检查 \AZURE_SPEECH_KEY\ 和 \AZURE_SPEECH_REGION\ 环境变量配置。
+
+#### 3. 字体文件未找到
+**错误**: \Font file not found\
+**解决**: 确保系统安装了微软雅黑字体，或修改 \config.py\ 中的字体路径。
+
+#### 4. 内存不足
+**错误**: \Memory error during video processing\
+**解决**: 使用较低的画质预设，或减少并发任务数量。
 
 ### 调试模式
-设置环境变量启用详细日志：
-```bash
-export PYTHONPATH=.
-python auto_generate_video_mcp_modular.py
-``` 
+设置环境变量 \DEBUG_MODE=true\ 启用详细日志输出。
+
+##  贡献指南
+
+1. Fork 项目
+2. 创建功能分支 (\git checkout -b feature/AmazingFeature\)
+3. 提交更改 (\git commit -m 'Add some AmazingFeature'\)
+4. 推送到分支 (\git push origin feature/AmazingFeature\)
+5. 打开 Pull Request
+
+##  许可证
+
+本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+
+##  支持
+
+如有问题或建议，请通过以下方式联系：
+
+- 提交 Issue
+- 发送邮件至项目维护者
+- 查看项目 Wiki 获取更多信息
+
+##  更新日志
+
+### v3.0.0
+- 重构为模块化架构
+- 添加异步任务处理
+- 支持多种画质预设
+- 改进配置管理系统
+
+### v2.0.0
+- 添加智能文本分割
+- 支持时间标记控制
+- 改进字幕样式配置
+
+### v1.0.0
+- 初始版本发布
+- 基础视频生成功能
+- Azure 语音服务集成

@@ -1,6 +1,6 @@
 ﻿# Auto Video Generator MCP
 
-**English** | [中文](README_CN.md)
+**English** | [中文](README.md)
 
 A smart video generation system based on MCP (Model Context Protocol), supporting automatic subtitle generation, voice synthesis, and video editing.
 

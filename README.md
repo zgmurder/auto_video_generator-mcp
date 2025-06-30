@@ -1,6 +1,6 @@
 ﻿# Auto Video Generator MCP
 
-**English** | [中文](README_CN.md)
+[English](README_EN.md) | [中文](README.md)
 
 一个基于 MCP (Model Context Protocol) 的智能视频生成系统，支持自动添加字幕、语音合成和视频剪辑功能。
 

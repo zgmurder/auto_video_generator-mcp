@@ -1,33 +1,33 @@
 ﻿# Auto Video Generator MCP
 
-一个基于 MCP (Model Context Protocol) 的智能视频生成系统，支持自动添加字幕、语音合成和视频剪辑功能。
+A smart video generation system based on MCP (Model Context Protocol), supporting automatic subtitle generation, voice synthesis, and video editing.
 
-##  功能特性
+##  Features
 
-### 核心功能
-- **智能视频剪辑**: 支持视频片段保留/剪切模式
-- **自动字幕生成**: 智能文本分割和字幕样式自定义
-- **语音合成**: 集成 Azure 语音服务，支持多种音色
-- **多画质输出**: 支持 240p 到 1080p 多种画质预设
-- **异步任务处理**: 支持长时间任务的异步处理
-- **时间标记控制**: 支持在文本中使用时间标记控制静默时间
+### Core Features
+- **Smart Video Editing**: Support video segment keep/cut modes
+- **Automatic Subtitle Generation**: Intelligent text splitting and subtitle style customization
+- **Voice Synthesis**: Integrated Azure Speech Service with multiple voice options
+- **Multi-Quality Output**: Support 240p to 1080p quality presets
+- **Async Task Processing**: Support long-running task processing
+- **Time Mark Control**: Support time marks in text to control silence duration
 
-### 技术特性
-- **模块化架构**: 清晰的模块分离，易于维护和扩展
-- **MCP 协议**: 基于 FastMCP 的标准化接口
-- **配置管理**: 灵活的配置系统，支持环境变量
-- **任务管理**: 完整的任务状态跟踪和管理
-- **临时文件清理**: 自动清理处理过程中的临时文件
+### Technical Features
+- **Modular Architecture**: Clear module separation for easy maintenance and extension
+- **MCP Protocol**: Standardized interface based on FastMCP
+- **Configuration Management**: Flexible configuration system with environment variable support
+- **Task Management**: Complete task status tracking and management
+- **Temporary File Cleanup**: Automatic cleanup of temporary files during processing
 
-##  系统要求
+##  System Requirements
 
-### 软件依赖
+### Software Dependencies
 - Python 3.8+
-- FFmpeg (需要预先安装并配置到系统 PATH)
-- Windows 系统 (字体路径配置)
+- FFmpeg (pre-installed and configured in system PATH)
+- Windows system (font path configuration)
 
-### Python 依赖
-\\\
+### Python Dependencies
+```
 httpx>=0.24.0
 fastmcp>=0.1.0
 azure-cognitiveservices-speech>=1.31.0
@@ -36,266 +36,266 @@ moviepy>=1.0.3
 opencv-python>=4.8.0
 Pillow>=10.0.0
 jieba>=0.42.1
-\\\
+```
 
-##  安装配置
+##  Installation & Configuration
 
-### 1. 克隆项目
-\\\ash
+### 1. Clone Project
+```bash
 git clone <repository-url>
 cd auto-video-generator-mcp
-\\\
+```
 
-### 2. 安装依赖
-\\\ash
+### 2. Install Dependencies
+```bash
 pip install -r requirements.txt
-\\\
+```
 
-### 3. 配置环境变量
-\\\ash
-# Azure 语音服务配置
+### 3. Configure Environment Variables
+```bash
+# Azure Speech Service Configuration
 export AZURE_SPEECH_KEY="your_azure_speech_key"
 export AZURE_SPEECH_REGION="eastasia"
 
-# FFmpeg 路径配置 (可选)
+# FFmpeg Path Configuration (Optional)
 export FFMPEG_PATH="path/to/ffmpeg"
 export FFPROBE_PATH="path/to/ffprobe"
 
-# 调试模式 (可选)
+# Debug Mode (Optional)
 export DEBUG_MODE="true"
-\\\
+```
 
-### 4. 启动服务器
-\\\ash
+### 4. Start Server
+```bash
 python auto_generate_video_mcp_modular.py
-\\\
+```
 
-服务器将在 \http://localhost:8000/sse\ 启动。
+The server will start at `http://localhost:8000/sse`.
 
-##  使用指南
+##  Usage Guide
 
-### 基本使用
+### Basic Usage
 
-#### 1. 简单视频生成
-\\\python
-# 生成带字幕和语音的视频
+#### 1. Simple Video Generation
+```python
+# Generate video with subtitles and voice
 result = await generate_auto_video_mcp(
     video_path="input.mp4",
-    text="欢迎观看本视频，这是AI自动生成的解说。",
+    text="Welcome to this video, this is AI-generated commentary.",
     voice_index=0,
     output_path="output.mp4"
 )
-\\\
+```
 
-#### 2. 自定义画质
-\\\python
-# 生成高清视频
+#### 2. Custom Quality
+```python
+# Generate HD video
 result = await generate_auto_video_mcp(
     video_path="input.mp4",
-    text="高清视频内容",
+    text="HD video content",
     quality_preset="1080p"
 )
-\\\
+```
 
-#### 3. 视频片段处理
-\\\python
-# 保留指定片段
+#### 3. Video Segment Processing
+```python
+# Keep specified segments
 segments = '[{"start": "00:00:05", "end": "00:00:15"}]'
 result = await generate_auto_video_mcp(
     video_path="input.mp4",
-    text="片段解说",
+    text="Segment commentary",
     segments_mode="keep",
     segments=segments
 )
-\\\
+```
 
-### 高级功能
+### Advanced Features
 
-#### 1. 时间标记控制
-\\\python
-# 使用时间标记控制静默时间
-text = "{5s}欢迎观看{5000ms}本视频由AI自动剪辑并添加智能字幕和语音解说。{2s}感谢您的观看！"
+#### 1. Time Mark Control
+```python
+# Use time marks to control silence duration
+text = "{5s}Welcome to watch{5000ms}this video is automatically edited by AI and adds intelligent subtitles and voice commentary.{2s}Thank you for watching!"
 result = await generate_auto_video_mcp(
     video_path="input.mp4",
     text=text
 )
-\\\
+```
 
-#### 2. 自定义字幕样式
-\\\python
+#### 2. Custom Subtitle Style
+```python
 subtitle_style = '{"fontSize": 60, "color": "yellow", "bgColor": [0, 0, 0, 128]}'
 result = await generate_auto_video_mcp(
     video_path="input.mp4",
-    text="自定义字幕样式",
+    text="Custom subtitle style",
     subtitle_style=subtitle_style
 )
-\\\
+```
 
-#### 3. 异步任务处理
-\\\python
-# 创建异步任务
+#### 3. Async Task Processing
+```python
+# Create async task
 task_id = await generate_auto_video_async(
     video_path="input.mp4",
-    text="长时间处理任务"
+    text="Long processing task"
 )
 
-# 查询任务状态
+# Query task status
 status = await get_task_status(task_id)
 
-# 取消任务
+# Cancel task
 await cancel_task(task_id)
-\\\
+```
 
-##  配置说明
+##  Configuration
 
-### 画质预设
-| 预设 | 分辨率 | 比特率 | 适用场景 |
-|------|--------|--------|----------|
-| 240p | 426240 | 500k | 快速预览 |
-| 360p | 640360 | 800k | 移动设备 |
-| 480p | 854480 | 1.2M | 一般用途 |
-| 720p | 1280720 | 2M | 默认设置 |
-| 1080p | 19201080 | 4M | 最高质量 |
+### Quality Presets
+| Preset | Resolution | Bitrate | Use Case |
+|--------|------------|---------|----------|
+| 240p | 426240 | 500k | Quick Preview |
+| 360p | 640360 | 800k | Mobile Devices |
+| 480p | 854480 | 1.2M | General Use |
+| 720p | 1280720 | 2M | Default Setting |
+| 1080p | 19201080 | 4M | Highest Quality |
 
-### 语音音色
-- \oice_index=0\: zh-CN-XiaoxiaoNeural (默认)
-- \oice_index=1-4\: 其他 Azure 语音音色
+### Voice Options
+- `voice_index=0`: zh-CN-XiaoxiaoNeural (Default)
+- `voice_index=1-4`: Other Azure voice options
 
-### 字幕样式配置
-\\\json
+### Subtitle Style Configuration
+```json
 {
     "fontSize": 50,
     "color": "white",
     "bgColor": [0, 0, 0, 30],
-    "fontPath": "C:\\\\Windows\\\\Fonts\\\\msyh.ttc",
+    "fontPath": "C:\\Windows\\Fonts\\msyh.ttc",
     "marginX": 100,
     "marginBottom": 50
 }
-\\\
+```
 
-##  API 接口
+##  API Interfaces
 
-### 核心功能接口
+### Core Function Interfaces
 
-#### \generate_auto_video_mcp\
-主要视频生成接口，支持异步任务处理。
+#### `generate_auto_video_mcp`
+Main video generation interface with async task support.
 
-**参数:**
-- \ideo_path\ (str): 视频文件路径 (必传)
-- \	ext\ (str): 要转换的文本 (可选)
-- \oice_index\ (int): 语音音色索引 0-4 (默认: 0)
-- \output_path\ (str): 输出视频路径 (默认: "output_video.mp4")
-- \segments_mode\ (str): 视频片段模式 "keep" 或 "cut" (默认: "keep")
-- \segments\ (str): 视频片段配置 JSON 字符串 (可选)
-- \subtitle_style\ (str): 字幕样式配置 JSON 字符串 (可选)
-- \uto_split_config\ (str): 智能分割配置 JSON 字符串 (可选)
-- \quality_preset\ (str): 画质预设 (默认: "720p")
+**Parameters:**
+- `video_path` (str): Video file path (required)
+- `text` (str): Text to convert (optional)
+- `voice_index` (int): Voice index 0-4 (default: 0)
+- `output_path` (str): Output video path (default: "output_video.mp4")
+- `segments_mode` (str): Video segment mode "keep" or "cut" (default: "keep")
+- `segments` (str): Video segment configuration JSON string (optional)
+- `subtitle_style` (str): Subtitle style configuration JSON string (optional)
+- `auto_split_config` (str): Auto-split configuration JSON string (optional)
+- `quality_preset` (str): Quality preset (default: "720p")
 
-#### \generate_auto_video_sync\
-同步视频生成接口，适合短时间任务。
+#### `generate_auto_video_sync`
+Synchronous video generation interface, suitable for short tasks.
 
-#### \generate_auto_video_async\
-异步视频生成接口，适合长时间任务。
+#### `generate_auto_video_async`
+Asynchronous video generation interface, suitable for long tasks.
 
-### 任务管理接口
+### Task Management Interfaces
 
-#### \get_task_status(task_id)\
-获取任务状态和进度信息。
+#### `get_task_status(task_id)`
+Get task status and progress information.
 
-#### \list_all_tasks()\
-列出所有任务及其状态。
+#### `list_all_tasks()`
+List all tasks and their status.
 
-#### \cancel_task(task_id)\
-取消正在运行的任务。
+#### `cancel_task(task_id)`
+Cancel running task.
 
-### 配置查询接口
+### Configuration Query Interfaces
 
-#### \get_system_status()\
-获取系统状态信息。
+#### `get_system_status()`
+Get system status information.
 
-#### \get_available_voice_options()\
-获取可用的语音选项。
+#### `get_available_voice_options()`
+Get available voice options.
 
-#### \alidate_input_parameters(text, video_path, voice_index)\
-验证输入参数的有效性。
+#### `validate_input_parameters(text, video_path, voice_index)`
+Validate input parameter validity.
 
-#### \get_generation_estimate(text, video_path)\
-获取生成时间估算。
+#### `get_generation_estimate(text, video_path)`
+Get generation time estimate.
 
-##  项目结构
+##  Project Structure
 
-\\\
+```
 auto-video-generator-mcp/
- auto_generate_video_mcp_modular.py  # 主服务器文件
- auto_video_modules/                 # 核心模块目录
-    __init__.py                     # 模块初始化
-    config.py                       # 配置管理
-    ffmpeg_utils.py                 # FFmpeg 工具
-    mcp_tools.py                    # MCP 工具接口
-    subtitle_utils.py               # 字幕处理
-    video_utils.py                  # 视频处理
-    voice_utils.py                  # 语音处理
- requirements.txt                    # Python 依赖
- README.md                          # 项目文档
-\\\
+ auto_generate_video_mcp_modular.py  # Main server file
+ auto_video_modules/                 # Core modules directory
+    __init__.py                     # Module initialization
+    config.py                       # Configuration management
+    ffmpeg_utils.py                 # FFmpeg utilities
+    mcp_tools.py                    # MCP tool interfaces
+    subtitle_utils.py               # Subtitle processing
+    video_utils.py                  # Video processing
+    voice_utils.py                  # Voice processing
+ requirements.txt                    # Python dependencies
+ README.md                          # Project documentation
+```
 
-##  故障排除
+##  Troubleshooting
 
-### 常见问题
+### Common Issues
 
-#### 1. FFmpeg 未找到
-**错误**: \FFmpeg not found in system PATH\
-**解决**: 确保 FFmpeg 已安装并添加到系统 PATH，或设置 \FFMPEG_PATH\ 环境变量。
+#### 1. FFmpeg Not Found
+**Error**: `FFmpeg not found in system PATH`
+**Solution**: Ensure FFmpeg is installed and added to system PATH, or set `FFMPEG_PATH` environment variable.
 
-#### 2. Azure 语音服务错误
-**错误**: \Azure Speech Service authentication failed\
-**解决**: 检查 \AZURE_SPEECH_KEY\ 和 \AZURE_SPEECH_REGION\ 环境变量配置。
+#### 2. Azure Speech Service Error
+**Error**: `Azure Speech Service authentication failed`
+**Solution**: Check `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION` environment variable configuration.
 
-#### 3. 字体文件未找到
-**错误**: \Font file not found\
-**解决**: 确保系统安装了微软雅黑字体，或修改 \config.py\ 中的字体路径。
+#### 3. Font File Not Found
+**Error**: `Font file not found`
+**Solution**: Ensure Microsoft YaHei font is installed, or modify font path in `config.py`.
 
-#### 4. 内存不足
-**错误**: \Memory error during video processing\
-**解决**: 使用较低的画质预设，或减少并发任务数量。
+#### 4. Memory Insufficient
+**Error**: `Memory error during video processing`
+**Solution**: Use lower quality preset, or reduce concurrent task count.
 
-### 调试模式
-设置环境变量 \DEBUG_MODE=true\ 启用详细日志输出。
+### Debug Mode
+Set environment variable `DEBUG_MODE=true` to enable detailed log output.
 
-##  贡献指南
+##  Contributing
 
-1. Fork 项目
-2. 创建功能分支 (\git checkout -b feature/AmazingFeature\)
-3. 提交更改 (\git commit -m 'Add some AmazingFeature'\)
-4. 推送到分支 (\git push origin feature/AmazingFeature\)
-5. 打开 Pull Request
+1. Fork the project
+2. Create feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Open Pull Request
 
-##  许可证
+##  License
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-##  支持
+##  Support
 
-如有问题或建议，请通过以下方式联系：
+For questions or suggestions, please contact us through:
 
-- 提交 Issue
-- 发送邮件至项目维护者
-- 查看项目 Wiki 获取更多信息
+- Submit Issue
+- Send email to project maintainer
+- Check project Wiki for more information
 
-##  更新日志
+##  Changelog
 
 ### v3.0.0
-- 重构为模块化架构
-- 添加异步任务处理
-- 支持多种画质预设
-- 改进配置管理系统
+- Refactored to modular architecture
+- Added async task processing
+- Support multiple quality presets
+- Improved configuration management system
 
 ### v2.0.0
-- 添加智能文本分割
-- 支持时间标记控制
-- 改进字幕样式配置
+- Added intelligent text splitting
+- Support time mark control
+- Improved subtitle style configuration
 
 ### v1.0.0
-- 初始版本发布
-- 基础视频生成功能
-- Azure 语音服务集成
+- Initial version release
+- Basic video generation functionality
+- Azure Speech Service integration

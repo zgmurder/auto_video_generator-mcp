@@ -407,6 +407,64 @@ result = await generate_auto_video_mcp(
 - `video_path` (str): 视频文件路径
 
 **返回值:** JSON 字符串，包含时间估算
+
+#### `detect_video_motion_mcp(video_path: str, config_path: str = "best_motion_clip_params.json")`
+**独立的运动检测工具**，用于分析视频中的静止片段。
+
+**参数:**
+- `video_path` (str): 要分析的视频文件路径
+- `config_path` (str): 运动检测配置文件路径 (默认: "best_motion_clip_params.json")
+
+**返回值:** JSON 字符串，包含检测结果
+```json
+{
+  "video_path": "input.mp4",
+  "config": {
+    "motion_threshold": 0.1,
+    "min_static_duration": 2.0,
+    "sample_step": 1
+  },
+  "static_segments": [
+    {
+      "start": 5.2,
+      "end": 8.5,
+      "duration": 3.3
+    }
+  ],
+  "timestamps": [
+    {
+      "start": "00:00:05.200",
+      "end": "00:00:08.500"
+    }
+  ],
+  "summary": {
+    "total_segments": 5,
+    "total_static_time": 15.6,
+    "average_segment_duration": 3.12
+  }
+}
+```
+
+#### `optimize_video_motion_params_mcp(video_path: str, target_min_duration: float = 50.0, target_max_duration: float = 70.0)`
+**运动检测参数优化工具**，自动寻找最佳参数以达到目标视频时长。
+
+**参数:**
+- `video_path` (str): 要优化的视频文件路径
+- `target_min_duration` (float): 目标最小时长 (秒)
+- `target_max_duration` (float): 目标最大时长 (秒)
+
+**返回值:** JSON 字符串，包含优化结果
+```json
+{
+  "success": true,
+  "optimal_config": {
+    "motion_threshold": 0.15,
+    "min_static_duration": 1.5,
+    "sample_step": 2
+  },
+  "message": "找到最优参数并已保存到配置文件"
+}
+```
 ```json
 {
   "estimated_time": 180,
@@ -462,6 +520,7 @@ auto-video-generator-mcp/
     config.py                       # 配置管理
     ffmpeg_utils.py                 # FFmpeg 工具
     mcp_tools.py                    # MCP 工具接口
+    motion_detection_utils.py       # 运动检测工具
     subtitle_utils.py               # 字幕处理
     video_utils.py                  # 视频处理
     voice_utils.py                  # 语音处理

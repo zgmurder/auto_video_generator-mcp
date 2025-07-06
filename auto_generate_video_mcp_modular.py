@@ -25,6 +25,9 @@ from auto_video_modules.mcp_tools import (
 # 导入GPU加速功能
 from auto_video_modules.ffmpeg_utils import check_gpu_acceleration
 
+# 导入运动检测功能
+from auto_video_modules.motion_detection_utils import detect_video_motion, optimize_video_motion_params
+
 # 创建主MCP服务器
 mcp = FastMCP("auto-video-generator", log_level="INFO")
 
@@ -107,6 +110,20 @@ async def check_gpu_acceleration_mcp() -> str:
     return await check_gpu_acceleration()
 
 @mcp.tool()
+async def detect_video_motion_mcp(video_path: str, config_path: str = "best_motion_clip_params.json") -> str:
+    """检测视频中的运动片段"""
+    return await detect_video_motion(video_path, config_path)
+
+@mcp.tool()
+async def optimize_video_motion_params_mcp(
+    video_path: str, 
+    target_min_duration: float = 50.0, 
+    target_max_duration: float = 70.0
+) -> str:
+    """优化视频运动检测参数"""
+    return await optimize_video_motion_params(video_path, target_min_duration, target_max_duration)
+
+@mcp.tool()
 async def get_all_available_tools() -> str:
     """获取所有可用的工具列表"""
     tools_info = """智能视频剪辑MCP服务器 - 可用工具列表
@@ -127,6 +144,8 @@ async def get_all_available_tools() -> str:
 - validate_input_parameters_mcp: 验证输入参数
 - get_generation_estimate_mcp: 获取生成时间估算
 - check_gpu_acceleration_mcp: 检查GPU加速支持情况
+- detect_video_motion_mcp: 检测视频中的运动片段
+- optimize_video_motion_params_mcp: 优化视频运动检测参数
 - get_all_available_tools: 获取所有可用的工具列表
 
 === 使用建议 ===
@@ -215,6 +234,8 @@ mcp.tool()(get_task_status)
 mcp.tool()(list_all_tasks)
 mcp.tool()(cancel_task)
 mcp.tool()(check_gpu_acceleration_mcp)
+mcp.tool()(detect_video_motion_mcp)
+mcp.tool()(optimize_video_motion_params_mcp)
 
 def main():
     print("启动自动视频生成MCP服务器 v3.0...")

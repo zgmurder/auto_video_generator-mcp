@@ -159,9 +159,21 @@ async def generate_auto_video(
         # 运动检测逻辑
         if enable_motion_clip:
             print("[自动检测] 启用帧间运动量自动剪辑...")
-            params = motion_clip_params or {"motion_threshold": 0.1, "min_static_duration": 2.0, "sample_step": 1}
-            from auto_video_modules.video_utils import get_video_info
-            from test_low_motion_threshold import detect_static_segments_by_motion, to_timestamp
+            from .motion_detection_utils import detect_static_segments_by_motion, to_timestamp, load_motion_config
+            
+            # 加载配置参数
+            if motion_clip_params:
+                # 使用传入的参数
+                params = motion_clip_params
+            else:
+                # 使用配置文件中的参数
+                config = load_motion_config()
+                params = {
+                    "motion_threshold": config.motion_threshold,
+                    "min_static_duration": config.min_static_duration,
+                    "sample_step": config.sample_step
+                }
+            
             static_segments = await detect_static_segments_by_motion(
                 video_path,
                 motion_threshold=params.get("motion_threshold", 0.1),
@@ -169,8 +181,8 @@ async def generate_auto_video(
                 sample_step=params.get("sample_step", 1)
             )
             print(f"[自动检测] 检测到静止片段 {len(static_segments)} 个")
-            segments_list = static_segments
-            segments = json.dumps([{ "start": to_timestamp(s["start"]), "end": to_timestamp(s["end"])} for s in static_segments])
+            segments_list = [seg.to_dict() for seg in static_segments]
+            segments = json.dumps([{ "start": to_timestamp(s["start"]), "end": to_timestamp(s["end"])} for s in segments_list])
             segments_mode = "cut"
         
         # 验证输入参数

@@ -99,13 +99,22 @@ result = await generate_auto_video_mcp(
 
 #### 3. 视频片段处理
 ```python
-# 保留指定片段
-segments = '[{"start": "00:00:05", "end": "00:00:15"}]'
+# 保留指定片段 - 注意：segments必须是JSON字符串格式
+segments = '[{"start": "00:00:05", "end": "00:00:15"}]'  # JSON字符串
 result = await generate_auto_video_mcp(
     video_path="input.mp4",
     text="片段解说",
     segments_mode="keep",
-    segments=segments
+    segments=segments  # 传递JSON字符串，不是字典对象
+)
+
+# 剪切指定片段
+segments = '[{"start": "00:00:10", "end": "00:00:20"}, {"start": "00:00:30", "end": "00:00:40"}]'
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    text="剪切片段解说",
+    segments_mode="cut",
+    segments=segments  # JSON字符串格式
 )
 ```
 
@@ -123,12 +132,16 @@ result = await generate_auto_video_mcp(
 
 #### 2. 自定义字幕样式
 ```python
-subtitle_style = '{"fontSize": 60, "color": "yellow", "bgColor": [0, 0, 0, 128]}'
+# 自定义字幕样式 - 注意：subtitle_style必须是JSON字符串格式
+subtitle_style = '{"fontSize": 60, "color": "yellow", "bgColor": [0, 0, 0, 128]}'  # JSON字符串
 result = await generate_auto_video_mcp(
     video_path="input.mp4",
     text="自定义字幕样式",
-    subtitle_style=subtitle_style
+    subtitle_style=subtitle_style  # 传递JSON字符串，不是字典对象
 )
+
+# 更多字幕样式示例
+subtitle_style = '{"fontSize": 50, "color": "white", "bgColor": [0, 0, 0, 30], "marginX": 100, "marginBottom": 50}'
 ```
 
 #### 3. 异步任务处理
@@ -149,6 +162,7 @@ await cancel_task(task_id)
 #### 4. 自动删除重复帧/静止片段
 ```python
 # 自动检测并剪掉视频中的静止/无聊片段（如长时间无动作画面）
+# 方法1：使用配置文件中的参数
 import json
 with open("best_motion_clip_params.json", "r", encoding="utf-8") as f:
     motion_params = json.load(f)
@@ -156,7 +170,16 @@ result = await generate_auto_video_mcp(
     video_path="input.mp4",
     output_path="output_motion_clip.mp4",
     enable_motion_clip=True,  # 启用自动静止片段检测
-    motion_clip_params=motion_params  # 可选，传入推荐参数或自定义
+    motion_clip_params=json.dumps(motion_params)  # 转换为JSON字符串
+)
+
+# 方法2：直接传入JSON字符串参数
+motion_params = '{"motion_threshold": 0.1, "min_static_duration": 2.0, "sample_step": 1}'  # JSON字符串
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    output_path="output_motion_clip.mp4",
+    enable_motion_clip=True,
+    motion_clip_params=motion_params  # 直接传递JSON字符串
 )
 ```
 
@@ -181,12 +204,77 @@ optimized_config = await optimize_video_processing_mcp("input.mp4", "1080p")
 benchmark_result = await benchmark_gpu_performance_mcp()
 ```
 
-> **说明**：
-> - `enable_motion_clip=True` 时，系统会自动分析视频，检测并剪掉所有静止/重复帧片段。
-> - `motion_clip_params` 可选，支持自定义运动阈值、最小静止时长、采样步长等，推荐直接用 `best_motion_clip_params.json`。
-> - `enable_gpu_acceleration=True` 时，系统会启用极致GPU优化，自动检测硬件配置并优化编码参数。
-> - 极致GPU优化包括：多线程处理、内存优化、编码器调优、异步处理、缓存优化等。
-> - 不影响原有字幕、语音等功能，完全兼容。
+> **重要说明**：
+> - **JSON参数格式**: 所有配置参数（`segments`, `subtitle_style`, `auto_split_config`, `motion_clip_params`）都必须使用JSON字符串格式传递，不能直接传递字典对象。
+> - **时间格式**: 视频片段时间格式为 "HH:MM:SS"，例如 "00:00:05" 表示5秒。
+> - **运动检测**: `enable_motion_clip=True` 时，系统会自动分析视频，检测并剪掉所有静止/重复帧片段。
+> - **GPU优化**: `enable_gpu_acceleration=True` 时，系统会启用极致GPU优化，自动检测硬件配置并优化编码参数。
+> - **极致GPU优化**: 包括多线程处理、内存优化、编码器调优、异步处理、缓存优化等。
+> - **兼容性**: 不影响原有字幕、语音等功能，完全兼容。
+
+##  JSON参数格式说明
+
+### 重要提醒
+所有配置参数都必须使用**JSON字符串格式**传递，不能直接传递字典对象。这是为了确保MCP协议的兼容性和数据传递的准确性。
+
+### 参数格式示例
+
+#### 1. 视频片段配置 (`segments`)
+```json
+[
+  {"start": "00:00:05", "end": "00:00:15"},
+  {"start": "00:00:30", "end": "00:00:45"}
+]
+```
+**传递方式**: `segments='[{"start": "00:00:05", "end": "00:00:15"}]'`
+
+#### 2. 字幕样式配置 (`subtitle_style`)
+```json
+{
+  "fontSize": 50,
+  "color": "white",
+  "bgColor": [0, 0, 0, 30],
+  "fontPath": "C:\\Windows\\Fonts\\msyh.ttc",
+  "marginX": 100,
+  "marginBottom": 50
+}
+```
+**传递方式**: `subtitle_style='{"fontSize": 50, "color": "white"}'`
+
+#### 3. 智能分割配置 (`auto_split_config`)
+```json
+{
+  "max_chars_per_line": 20,
+  "max_duration_per_segment": 5.0,
+  "min_duration_per_segment": 1.0
+}
+```
+**传递方式**: `auto_split_config='{"max_chars_per_line": 20, "max_duration_per_segment": 5.0}'`
+
+#### 4. 运动检测配置 (`motion_clip_params`)
+```json
+{
+  "motion_threshold": 0.1,
+  "min_static_duration": 2.0,
+  "sample_step": 1
+}
+```
+**传递方式**: `motion_clip_params='{"motion_threshold": 0.1, "min_static_duration": 2.0}'`
+
+### 常见错误示例
+```python
+# ❌ 错误：直接传递字典对象
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    segments=[{"start": "00:00:05", "end": "00:00:15"}]  # 错误！
+)
+
+# ✅ 正确：传递JSON字符串
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    segments='[{"start": "00:00:05", "end": "00:00:15"}]'  # 正确！
+)
+```
 
 ##  配置说明
 
@@ -234,11 +322,15 @@ benchmark_result = await benchmark_gpu_performance_mcp()
 - `segments_mode` (str): 视频片段处理模式 (默认: "keep")
   - "keep": 保留指定片段
   - "cut": 剪切指定片段
-- `segments` (str): 视频片段配置，JSON 字符串格式 (可选)
+- `segments` (str): **视频片段配置，必须是JSON字符串格式** (可选)
   ```json
-  [{"start": "00:00:05", "end": "00:00:15"}, {"start": "00:00:30", "end": "00:00:45"}]
+  [
+    {"start": "00:00:05", "end": "00:00:15"}, 
+    {"start": "00:00:30", "end": "00:00:45"}
+  ]
   ```
-- `subtitle_style` (str): 字幕样式配置，JSON 字符串格式 (可选)
+  **注意**: 时间格式为 "HH:MM:SS"，必须使用JSON字符串格式传递
+- `subtitle_style` (str): **字幕样式配置，必须是JSON字符串格式** (可选)
   ```json
   {
     "fontSize": 50,
@@ -249,11 +341,20 @@ benchmark_result = await benchmark_gpu_performance_mcp()
     "marginBottom": 50
   }
   ```
-- `auto_split_config` (str): 智能文本分割配置，JSON 字符串格式 (可选)
+  **注意**: 必须使用JSON字符串格式传递，不能直接传递字典对象
+- `auto_split_config` (str): **智能文本分割配置，必须是JSON字符串格式** (可选)
+  ```json
+  {
+    "max_chars_per_line": 20,
+    "max_duration_per_segment": 5.0,
+    "min_duration_per_segment": 1.0
+  }
+  ```
+  **注意**: 必须使用JSON字符串格式传递
 - `quality_preset` (str): 输出视频画质预设 (默认: "720p")
   - 支持: "240p", "360p", "480p", "720p", "1080p"
 - `enable_motion_clip` (bool): 是否启用自动静止片段检测 (默认: False)
-- `motion_clip_params` (dict): 运动检测参数配置 (可选)
+- `motion_clip_params` (str): **运动检测参数配置，必须是JSON字符串格式** (可选)
   ```json
   {
     "motion_threshold": 0.1,
@@ -261,18 +362,34 @@ benchmark_result = await benchmark_gpu_performance_mcp()
     "sample_step": 1
   }
   ```
+  **注意**: 必须使用JSON字符串格式传递，不能直接传递字典对象
 
 **返回值:** JSON 字符串，包含处理结果和状态信息
 
 **使用示例:**
 ```python
+# 基本使用
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    text="欢迎观看本视频，这是AI自动生成的解说。",
+    voice_index=0,
+    output_path="output.mp4",
+    quality_preset="1080p"
+)
+
+# 带JSON参数的高级使用
 result = await generate_auto_video_mcp(
     video_path="input.mp4",
     text="欢迎观看本视频，这是AI自动生成的解说。",
     voice_index=0,
     output_path="output.mp4",
     quality_preset="1080p",
-    enable_motion_clip=True
+    segments='[{"start": "00:00:05", "end": "00:00:15"}]',  # JSON字符串
+    segments_mode="keep",
+    subtitle_style='{"fontSize": 60, "color": "yellow", "bgColor": [0, 0, 0, 128]}',  # JSON字符串
+    auto_split_config='{"max_chars_per_line": 25, "max_duration_per_segment": 4.0}',  # JSON字符串
+    enable_motion_clip=True,
+    motion_clip_params='{"motion_threshold": 0.15, "min_static_duration": 1.5, "sample_step": 2}'  # JSON字符串
 )
 ```
 
@@ -673,7 +790,8 @@ result = await generate_auto_video_mcp(
     video_path="lecture.mp4",
     text="欢迎来到今天的课程。我们将学习人工智能的基础知识。首先，让我们了解什么是机器学习。",
     voice_index=0,
-    quality_preset="720p"
+    quality_preset="720p",
+    subtitle_style='{"fontSize": 60, "color": "white", "bgColor": [0, 0, 0, 50]}'  # JSON字符串
 )
 ```
 
@@ -684,7 +802,7 @@ result = await generate_auto_video_mcp(
     video_path="product_demo.mp4",
     text="这款产品具有以下特点：{2s}第一，操作简单易用。{1s}第二，功能强大全面。{1s}第三，性价比极高。",
     voice_index=1,
-    subtitle_style='{"fontSize": 60, "color": "yellow"}'
+    subtitle_style='{"fontSize": 60, "color": "yellow", "bgColor": [0, 0, 0, 30]}'  # JSON字符串
 )
 ```
 
@@ -695,9 +813,66 @@ result = await generate_auto_video_mcp(
     video_path="raw_video.mp4",
     text="",  # 空文本，只进行视频处理
     segments_mode="cut",
-    segments='[{"start": "00:00:10", "end": "00:00:20"}]',
-    quality_preset="1080p"
+    segments='[{"start": "00:00:10", "end": "00:00:20"}]',  # JSON字符串
+    quality_preset="1080p",
+    enable_gpu_acceleration=True  # 启用极致GPU优化
 )
+```
+
+##  大模型调用指南
+
+### 重要提醒
+当大模型调用本系统的工具函数时，**所有配置参数都必须使用JSON字符串格式**，不能直接传递字典对象。
+
+### 正确的调用方式
+
+#### 1. 基本视频生成
+```python
+# ✅ 正确：所有参数都是字符串格式
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    text="欢迎观看本视频",
+    voice_index=0,
+    output_path="output.mp4",
+    quality_preset="720p"
+)
+```
+
+#### 2. 带JSON参数的调用
+```python
+# ✅ 正确：JSON参数使用字符串格式
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    text="视频内容",
+    segments='[{"start": "00:00:05", "end": "00:00:15"}]',  # JSON字符串
+    subtitle_style='{"fontSize": 50, "color": "white"}',  # JSON字符串
+    motion_clip_params='{"motion_threshold": 0.1, "min_static_duration": 2.0}',  # JSON字符串
+    enable_gpu_acceleration=True
+)
+```
+
+#### 3. 错误示例
+```python
+# ❌ 错误：直接传递字典对象
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    segments=[{"start": "00:00:05", "end": "00:00:15"}],  # 错误！
+    subtitle_style={"fontSize": 50, "color": "white"},  # 错误！
+    motion_clip_params={"motion_threshold": 0.1}  # 错误！
+)
+```
+
+### JSON字符串构建方法
+```python
+import json
+
+# 方法1：使用json.dumps()
+segments = json.dumps([{"start": "00:00:05", "end": "00:00:15"}])
+subtitle_style = json.dumps({"fontSize": 50, "color": "white"})
+
+# 方法2：直接写字符串
+segments = '[{"start": "00:00:05", "end": "00:00:15"}]'
+subtitle_style = '{"fontSize": 50, "color": "white"}'
 ```
 
 ##  最佳实践

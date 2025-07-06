@@ -158,10 +158,20 @@ async def generate_auto_video(
         import json
         # 运动检测逻辑
         if enable_motion_clip:
-            print("[自动检测] 运动检测功能暂未实现，跳过运动检测...")
-            print("[提示] 如需运动检测功能，请手动指定 segments 参数")
-            # 暂时禁用运动检测，避免导入错误
-            enable_motion_clip = False
+            print("[自动检测] 启用帧间运动量自动剪辑...")
+            params = motion_clip_params or {"motion_threshold": 0.1, "min_static_duration": 2.0, "sample_step": 1}
+            from auto_video_modules.video_utils import get_video_info
+            from test_low_motion_threshold import detect_static_segments_by_motion, to_timestamp
+            static_segments = await detect_static_segments_by_motion(
+                video_path,
+                motion_threshold=params.get("motion_threshold", 0.1),
+                min_static_duration=params.get("min_static_duration", 2.0),
+                sample_step=params.get("sample_step", 1)
+            )
+            print(f"[自动检测] 检测到静止片段 {len(static_segments)} 个")
+            segments_list = static_segments
+            segments = json.dumps([{ "start": to_timestamp(s["start"]), "end": to_timestamp(s["end"])} for s in static_segments])
+            segments_mode = "cut"
         
         # 验证输入参数
         if not os.path.exists(video_path):

@@ -22,6 +22,9 @@ from auto_video_modules.mcp_tools import (
     get_generation_estimate
 )
 
+# 导入GPU加速功能
+from auto_video_modules.ffmpeg_utils import check_gpu_acceleration
+
 # 创建主MCP服务器
 mcp = FastMCP("auto-video-generator", log_level="INFO")
 
@@ -38,7 +41,9 @@ async def generate_auto_video_mcp(
     auto_split_config: Any = "",
     quality_preset: Any = "720p",
     enable_motion_clip: Any = False,
-    motion_clip_params: Any = None
+    motion_clip_params: Any = None,
+    enable_gpu_acceleration: Any = False,
+    gpu_type: Any = "auto"
 ) -> str:
     """智能剪辑视频并自动添加字幕、语音（主要功能）
     新增：enable_motion_clip, motion_clip_params
@@ -55,6 +60,8 @@ async def generate_auto_video_mcp(
         quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")
         enable_motion_clip: 是否启用运动剪辑
         motion_clip_params: 运动剪辑参数
+        enable_gpu_acceleration: 是否启用GPU加速
+        gpu_type: GPU类型 ("auto", "amd", "nvidia", "intel")
         
     Returns:
         生成结果信息
@@ -70,7 +77,7 @@ async def generate_auto_video_mcp(
     return await generate_auto_video(
         video_path, text, voice_index, output_path, 
         segments_mode, segments, subtitle_style, auto_split_config, quality_preset,
-        enable_motion_clip, motion_clip_params
+        enable_motion_clip, motion_clip_params, enable_gpu_acceleration, gpu_type
     )
 
 # 配置获取工具
@@ -95,6 +102,11 @@ async def get_generation_estimate_mcp(text: str, video_path: str) -> str:
     return await get_generation_estimate(text, video_path)
 
 @mcp.tool()
+async def check_gpu_acceleration_mcp() -> str:
+    """检查GPU加速支持情况"""
+    return await check_gpu_acceleration()
+
+@mcp.tool()
 async def get_all_available_tools() -> str:
     """获取所有可用的工具列表"""
     tools_info = """智能视频剪辑MCP服务器 - 可用工具列表
@@ -114,6 +126,7 @@ async def get_all_available_tools() -> str:
 - get_available_voice_options_mcp: 获取可用的语音选项
 - validate_input_parameters_mcp: 验证输入参数
 - get_generation_estimate_mcp: 获取生成时间估算
+- check_gpu_acceleration_mcp: 检查GPU加速支持情况
 - get_all_available_tools: 获取所有可用的工具列表
 
 === 使用建议 ===
@@ -148,6 +161,8 @@ async def get_all_available_tools() -> str:
 - quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")（可选，默认720p）
 - enable_motion_clip: 是否启用运动剪辑
 - motion_clip_params: 运动剪辑参数
+- enable_gpu_acceleration: 是否启用GPU加速 (可选，默认False)
+- gpu_type: GPU类型 ("auto", "amd", "nvidia", "intel") (可选，默认"auto")
 
 === 画质预设说明 ===
 - 240p: 低画质预览 (426x240, 500k) - 适合快速预览
@@ -181,6 +196,8 @@ auto_split_config: '{"enable": true, "strategy": "smart", "maxChars": 20}'
 2. 完整视频生成: 提供video_path和text
 3. 快速预览: 使用quality_preset="240p"
 4. 高质量输出: 使用quality_preset="1080p"
+5. GPU加速处理: 设置enable_gpu_acceleration=True
+6. 指定GPU类型: 设置gpu_type="amd"或"nvidia"或"intel"
 
 === 长时间任务处理建议 ===
 - 默认使用异步任务处理，避免连接超时
@@ -197,6 +214,7 @@ mcp.tool()(generate_auto_video_async)
 mcp.tool()(get_task_status)
 mcp.tool()(list_all_tasks)
 mcp.tool()(cancel_task)
+mcp.tool()(check_gpu_acceleration_mcp)
 
 def main():
     print("启动自动视频生成MCP服务器 v3.0...")

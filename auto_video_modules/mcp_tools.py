@@ -147,7 +147,9 @@ async def generate_auto_video(
     auto_split_config: str = "",
     quality_preset: str = "720p",
     enable_motion_clip: bool = False,
-    motion_clip_params: Optional[dict] = None
+    motion_clip_params: Optional[dict] = None,
+    enable_gpu_acceleration: bool = False,
+    gpu_type: str = "auto"
 ) -> str:
     """
     新增：enable_motion_clip, motion_clip_params
@@ -384,13 +386,26 @@ async def generate_auto_video(
             print(f"目标比特率: {target_bitrate}")
             
             # 使用ffmpeg直接处理视频（无音频、无字幕）
-            from .ffmpeg_utils import check_ffmpeg
+            from .ffmpeg_utils import check_ffmpeg, get_gpu_encoder
             ffmpeg_path, _ = check_ffmpeg()
+            
+            # 选择编码器
+            if enable_gpu_acceleration:
+                gpu_encoder = get_gpu_encoder(quality_preset, gpu_type)
+                if gpu_encoder:
+                    video_codec = gpu_encoder
+                    print(f"使用GPU加速编码器: {gpu_encoder}")
+                else:
+                    video_codec = "libx264"
+                    print("GPU加速不可用，使用CPU编码器: libx264")
+            else:
+                video_codec = "libx264"
+                print("使用CPU编码器: libx264")
             
             cmd = [
                 ffmpeg_path, "-y",
                 "-i", clipped_video_path,
-                "-c:v", "libx264",
+                "-c:v", video_codec,
                 "-b:v", target_bitrate,
                 "-s", f"{target_width}x{target_height}",
                 "-c:a", "copy",  # 保持原音频

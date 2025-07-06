@@ -12,6 +12,7 @@
 - **自动字幕生成**: 智能文本分割和字幕样式自定义
 - **语音合成**: 集成 Azure 语音服务，支持多种音色
 - **多画质输出**: 支持 240p 到 1080p 多种画质预设
+- **GPU 加速编码**: 支持 AMD AMF、NVIDIA NVENC、Intel QSV 硬件编码加速
 - **异步任务处理**: 支持长时间任务的异步处理
 - **时间标记控制**: 支持在文本中使用时间标记控制静默时间
 
@@ -156,6 +157,18 @@ result = await generate_auto_video_mcp(
     output_path="output_motion_clip.mp4",
     enable_motion_clip=True,  # 启用自动静止片段检测
     motion_clip_params=motion_params  # 可选，传入推荐参数或自定义
+)
+```
+
+#### 5. GPU 加速编码
+```python
+# 使用 GPU 加速进行视频编码，大幅提升处理速度
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    text="GPU加速视频处理",
+    enable_gpu_acceleration=True,  # 启用GPU加速
+    gpu_type="auto",  # 自动检测GPU类型，或指定"amd"/"nvidia"/"intel"
+    quality_preset="1080p"
 )
 ```
 

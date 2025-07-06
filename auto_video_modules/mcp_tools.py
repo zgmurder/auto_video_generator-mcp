@@ -403,30 +403,98 @@ async def generate_auto_video(
             
             # 选择编码器
             if enable_gpu_acceleration:
-                gpu_encoder = get_gpu_encoder(quality_preset, gpu_type)
-                if gpu_encoder:
-                    video_codec = gpu_encoder
-                    print(f"使用GPU加速编码器: {gpu_encoder}")
-                else:
-                    video_codec = "libx264"
-                    print("GPU加速不可用，使用CPU编码器: libx264")
+                print("[GPU加速] 启用极致GPU硬件编码加速...")
+                try:
+                    from .gpu_optimization_utils import GPUOptimizer
+                    
+                    # 创建GPU优化器
+                    optimizer = GPUOptimizer()
+                    gpu_config = optimizer.auto_optimize_config(clipped_video_path, quality_preset)
+                    
+                    print(f"[GPU加速] 使用优化编码器: {gpu_config.encoder}")
+                    print(f"[GPU加速] 线程数: {gpu_config.threads}")
+                    print(f"[GPU加速] 异步深度: {gpu_config.async_depth}")
+                    print(f"[GPU加速] 缓冲区: {gpu_config.buffer_size}MB")
+                    
+                    # 构建优化的FFmpeg命令
+                    optimized_cmd = optimizer.build_optimized_ffmpeg_command(
+                        clipped_video_path, output_path, gpu_config,
+                        additional_params={
+                            "b:v": target_bitrate,
+                            "s": f"{target_width}x{target_height}"
+                        }
+                    )
+                    
+                    # 执行优化的命令
+                    print("[GPU加速] 开始极致性能处理...")
+                    import subprocess
+                    result = subprocess.run(optimized_cmd, capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        print(f"[GPU加速] 处理完成: {output_path}")
+                    else:
+                        print(f"[GPU加速] 处理失败，回退到标准处理: {result.stderr}")
+                        # 回退到标准GPU处理
+                        gpu_encoder = get_gpu_encoder(quality_preset, gpu_type)
+                        if gpu_encoder:
+                            video_codec = gpu_encoder
+                            print(f"使用标准GPU编码器: {gpu_encoder}")
+                        else:
+                            video_codec = "libx264"
+                            print("GPU加速不可用，使用CPU编码器: libx264")
+                        
+                        cmd = [
+                            ffmpeg_path, "-y",
+                            "-i", clipped_video_path,
+                            "-c:v", video_codec,
+                            "-b:v", target_bitrate,
+                            "-s", f"{target_width}x{target_height}",
+                            "-c:a", "copy",  # 保持原音频
+                            output_path
+                        ]
+                        subprocess.run(cmd, check=True, capture_output=True)
+                        print(f"视频处理完成: {output_path}")
+                        
+                except Exception as e:
+                    print(f"[GPU加速] 极致优化失败，使用标准处理: {e}")
+                    # 回退到标准GPU处理
+                    gpu_encoder = get_gpu_encoder(quality_preset, gpu_type)
+                    if gpu_encoder:
+                        video_codec = gpu_encoder
+                        print(f"使用标准GPU编码器: {gpu_encoder}")
+                    else:
+                        video_codec = "libx264"
+                        print("GPU加速不可用，使用CPU编码器: libx264")
+                    
+                    cmd = [
+                        ffmpeg_path, "-y",
+                        "-i", clipped_video_path,
+                        "-c:v", video_codec,
+                        "-b:v", target_bitrate,
+                        "-s", f"{target_width}x{target_height}",
+                        "-c:a", "copy",  # 保持原音频
+                        output_path
+                    ]
+                    import subprocess
+                    subprocess.run(cmd, check=True, capture_output=True)
+                    print(f"视频处理完成: {output_path}")
             else:
                 video_codec = "libx264"
                 print("使用CPU编码器: libx264")
-            
-            cmd = [
-                ffmpeg_path, "-y",
-                "-i", clipped_video_path,
-                "-c:v", video_codec,
-                "-b:v", target_bitrate,
-                "-s", f"{target_width}x{target_height}",
-                "-c:a", "copy",  # 保持原音频
-                output_path
-            ]
-            
-            import subprocess
-            subprocess.run(cmd, check=True, capture_output=True)
-            print(f"视频处理完成: {output_path}")
+                
+                cmd = [
+                    ffmpeg_path, "-y",
+                    "-i", clipped_video_path,
+                    "-c:v", video_codec,
+                    "-b:v", target_bitrate,
+                    "-s", f"{target_width}x{target_height}",
+                    "-c:a", "copy",  # 保持原音频
+                    output_path
+                ]
+                
+                import subprocess
+                subprocess.run(cmd, check=True, capture_output=True)
+                print(f"视频处理完成: {output_path}")
             success = True
         
         if success:

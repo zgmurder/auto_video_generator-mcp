@@ -12,6 +12,7 @@ from . import video_utils
 from . import mcp_tools
 from . import video_processing_utils
 from . import motion_detection_utils
+from . import gpu_optimization_utils
 
 # 版本信息
 __version__ = "2.0.0"
@@ -29,6 +30,7 @@ __all__ = [
     "mcp_tools",
     "video_processing_utils",
     "motion_detection_utils",
+    "gpu_optimization_utils",
 
     # 版本信息
     "__version__",

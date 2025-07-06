@@ -160,21 +160,32 @@ result = await generate_auto_video_mcp(
 )
 ```
 
-#### 5. GPU 加速编码
+#### 5. 极致GPU加速编码
 ```python
-# 使用 GPU 加速进行视频编码，大幅提升处理速度
+# 使用极致GPU优化进行视频编码，将显卡性能发挥到最大
 result = await generate_auto_video_mcp(
     video_path="input.mp4",
-    text="GPU加速视频处理",
-    enable_gpu_acceleration=True,  # 启用GPU加速
+    text="极致GPU加速视频处理",
+    enable_gpu_acceleration=True,  # 启用极致GPU加速
     gpu_type="auto",  # 自动检测GPU类型，或指定"amd"/"nvidia"/"intel"
     quality_preset="1080p"
 )
+
+# 获取系统性能信息
+performance_info = await get_system_performance_info_mcp()
+
+# 优化视频处理参数
+optimized_config = await optimize_video_processing_mcp("input.mp4", "1080p")
+
+# GPU性能基准测试
+benchmark_result = await benchmark_gpu_performance_mcp()
 ```
 
 > **说明**：
 > - `enable_motion_clip=True` 时，系统会自动分析视频，检测并剪掉所有静止/重复帧片段。
 > - `motion_clip_params` 可选，支持自定义运动阈值、最小静止时长、采样步长等，推荐直接用 `best_motion_clip_params.json`。
+> - `enable_gpu_acceleration=True` 时，系统会启用极致GPU优化，自动检测硬件配置并优化编码参数。
+> - 极致GPU优化包括：多线程处理、内存优化、编码器调优、异步处理、缓存优化等。
 > - 不影响原有字幕、语音等功能，完全兼容。
 
 ##  配置说明
@@ -478,6 +489,68 @@ result = await generate_auto_video_mcp(
 }
 ```
 
+#### `get_system_performance_info_mcp()`
+**系统性能信息工具**，获取详细的硬件配置和性能数据。
+
+**返回值:** JSON 字符串，包含系统性能信息
+```json
+{
+  "cpu": {
+    "count": 12,
+    "frequency": 2500.0,
+    "usage": 21.3
+  },
+  "memory": {
+    "total": 31,
+    "available": 5,
+    "usage": 81.2
+  },
+  "gpu": {
+    "name": "AMD Radeon RX 580",
+    "memory": 8,
+    "driver": "22.40.00.01"
+  }
+}
+```
+
+#### `optimize_video_processing_mcp(video_path: str, target_quality: str = "720p")`
+**视频处理优化工具**，根据系统配置自动优化处理参数。
+
+**参数:**
+- `video_path` (str): 要优化的视频文件路径
+- `target_quality` (str): 目标画质预设
+
+**返回值:** JSON 字符串，包含优化配置
+```json
+{
+  "encoder": "hevc_amf",
+  "preset": "speed",
+  "quality": 18,
+  "threads": 16,
+  "buffer_size": 2048,
+  "async_depth": 6,
+  "bframes": 3,
+  "ref_frames": 4,
+  "enable_cache": true,
+  "cache_size": 4096
+}
+```
+
+#### `benchmark_gpu_performance_mcp()`
+**GPU性能基准测试工具**，评估当前系统的视频处理能力。
+
+**返回值:** JSON 字符串，包含性能测试结果
+```json
+{
+  "processing_time": 3.45,
+  "speed_multiplier": 2.90,
+  "encoder": "hevc_amf",
+  "threads": 16,
+  "async_depth": 6,
+  "performance_rating": "极佳 ⭐⭐⭐⭐⭐"
+}
+```
+
 ### 工具函数调用流程
 
 #### 基本使用流程
@@ -521,6 +594,7 @@ auto-video-generator-mcp/
     ffmpeg_utils.py                 # FFmpeg 工具
     mcp_tools.py                    # MCP 工具接口
     motion_detection_utils.py       # 运动检测工具
+    gpu_optimization_utils.py       # GPU优化工具
     subtitle_utils.py               # 字幕处理
     video_utils.py                  # 视频处理
     voice_utils.py                  # 语音处理

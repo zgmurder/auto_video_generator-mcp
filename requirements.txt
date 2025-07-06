@@ -14,4 +14,7 @@ opencv-python>=4.8.0
 Pillow>=10.0.0
 
 # 文本处理
-jieba>=0.42.1 
+jieba>=0.42.1
+
+# 系统监控和性能优化
+psutil>=5.9.0 

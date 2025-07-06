@@ -56,10 +56,6 @@ pip install -r requirements.txt
 
 ### 3. 配置环境变量
 ```bash
-# Azure 语音服务配置
-export AZURE_SPEECH_KEY="your_azure_speech_key"
-export AZURE_SPEECH_REGION="eastasia"
-
 # FFmpeg 路径配置 (可选)
 export FFMPEG_PATH="path/to/ffmpeg"
 export FFPROBE_PATH="path/to/ffprobe"

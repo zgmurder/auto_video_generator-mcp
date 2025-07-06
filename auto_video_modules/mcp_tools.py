@@ -8,9 +8,11 @@ import asyncio
 from mcp.server.fastmcp import FastMCP
 import json
 import subprocess
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import uuid
 from datetime import datetime
+import cv2
+import numpy as np
 
 # 导入各个模块
 from .ffmpeg_utils import setup_ffmpeg, get_mcp_instance as get_ffmpeg_mcp
@@ -89,6 +91,7 @@ async def generate_video_with_subtitles(text, video_path, voice_index=0, output_
             timing = [{"text": seg} for seg in text_segments]
         
         # 生成音频和获取时长
+        from .audio_utils import synthesize_and_get_durations
         tts_result = await synthesize_and_get_durations(timing, voice)
         audio_path = tts_result["audio_path"]
         segments = tts_result["segments"]
@@ -142,25 +145,32 @@ async def generate_auto_video(
     segments: str = "",
     subtitle_style: str = "",
     auto_split_config: str = "",
-    quality_preset: str = "720p"
+    quality_preset: str = "720p",
+    enable_motion_clip: bool = False,
+    motion_clip_params: Optional[dict] = None
 ) -> str:
-    """自动生成带字幕的视频
-    
-    Args:
-        video_path: 视频文件路径（必传）
-        text: 要转换的文本（可选，为空时只进行视频处理）
-        voice_index: 语音音色索引 (0-4)
-        output_path: 输出视频路径
-        segments_mode: 视频片段模式 ("keep" 保留指定片段, "cut" 剪掉指定片段)
-        segments: 视频片段配置 (JSON字符串，格式: [{"start": "00:00:05", "end": "00:00:15"}])
-        subtitle_style: 字幕样式配置 (JSON字符串)
-        auto_split_config: 智能分割配置 (JSON字符串)
-        quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")
-        
-    Returns:
-        生成结果信息
+    """
+    新增：enable_motion_clip, motion_clip_params
     """
     try:
+        import json
+        # 运动检测逻辑
+        if enable_motion_clip:
+            print("[自动检测] 启用帧间运动量自动剪辑...")
+            params = motion_clip_params or {"motion_threshold": 0.1, "min_static_duration": 2.0, "sample_step": 1}
+            from auto_video_modules.video_utils import get_video_info
+            from test_low_motion_threshold import detect_static_segments_by_motion, to_timestamp
+            static_segments = await detect_static_segments_by_motion(
+                video_path,
+                motion_threshold=params.get("motion_threshold", 0.1),
+                min_static_duration=params.get("min_static_duration", 2.0),
+                sample_step=params.get("sample_step", 1)
+            )
+            print(f"[自动检测] 检测到静止片段 {len(static_segments)} 个")
+            segments_list = static_segments
+            segments = json.dumps([{ "start": to_timestamp(s["start"]), "end": to_timestamp(s["end"])} for s in static_segments])
+            segments_mode = "cut"
+        
         # 验证输入参数
         if not os.path.exists(video_path):
             return f"错误：视频文件不存在: {video_path}"
@@ -284,6 +294,7 @@ async def generate_auto_video(
                 print("智能分割已关闭，使用完整文本")
             
             # 生成音频和获取时长
+            from .audio_utils import synthesize_and_get_durations
             tts_result = await synthesize_and_get_durations(timing, voice)
             audio_path = tts_result["audio_path"]
             segments_with_duration = tts_result["segments"]
@@ -632,37 +643,21 @@ async def generate_auto_video_mcp(
     segments: Any = "",
     subtitle_style: Any = "",
     auto_split_config: Any = "",
-    quality_preset: Any = "720p"
+    quality_preset: Any = "720p",
+    enable_motion_clip: Any = False,
+    motion_clip_params: Any = None
 ) -> str:
-    """智能剪辑视频并自动添加字幕、语音（默认使用异步任务）
-    
-    Args:
-        video_path: 视频文件路径（必传）
-        text: 要转换的文本（可选，为空时只进行视频处理）
-        voice_index: 语音音色索引 (0-4)
-        output_path: 输出视频路径
-        segments_mode: 视频片段模式 ("keep" 保留指定片段, "cut" 剪掉指定片段)
-        segments: 视频片段配置 (JSON字符串，格式: [{"start": "00:00:05", "end": "00:00:15"}])
-        subtitle_style: 字幕样式配置 (JSON字符串)
-        auto_split_config: 智能分割配置 (JSON字符串)
-        quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")
-        
-    Returns:
-        任务ID和状态信息（异步任务）
-    """
     import json
-    # 保证所有复杂参数为字符串
     if not isinstance(segments, str):
         segments = json.dumps(segments, ensure_ascii=False)
     if not isinstance(subtitle_style, str):
         subtitle_style = json.dumps(subtitle_style, ensure_ascii=False)
     if not isinstance(auto_split_config, str):
         auto_split_config = json.dumps(auto_split_config, ensure_ascii=False)
-    
-    # 默认使用异步任务处理
     return await create_video_generation_task(
         video_path, text, voice_index, output_path,
-        segments_mode, segments, subtitle_style, auto_split_config, quality_preset
+        segments_mode, segments, subtitle_style, auto_split_config, quality_preset,
+        enable_motion_clip, motion_clip_params
     )
 
 async def create_video_generation_task(
@@ -674,7 +669,9 @@ async def create_video_generation_task(
     segments: str = "",
     subtitle_style: str = "",
     auto_split_config: str = "",
-    quality_preset: str = "720p"
+    quality_preset: str = "720p",
+    enable_motion_clip: bool = False,
+    motion_clip_params: Optional[dict] = None
 ) -> str:
     """创建视频生成任务（异步）"""
     task_id = str(uuid.uuid4())
@@ -688,7 +685,9 @@ async def create_video_generation_task(
         "segments": segments,
         "subtitle_style": subtitle_style,
         "auto_split_config": auto_split_config,
-        "quality_preset": quality_preset
+        "quality_preset": quality_preset,
+        "enable_motion_clip": enable_motion_clip,
+        "motion_clip_params": motion_clip_params
     })
     
     task_status[task_id] = task
@@ -719,7 +718,9 @@ async def run_video_generation_task(task: VideoGenerationTask):
             task.params["segments"],
             task.params["subtitle_style"],
             task.params["auto_split_config"],
-            task.params["quality_preset"]
+            task.params["quality_preset"],
+            task.params["enable_motion_clip"],
+            task.params["motion_clip_params"]
         )
         
         task.progress = 100
@@ -742,36 +743,21 @@ async def generate_auto_video_async(
     segments: Any = "",
     subtitle_style: Any = "",
     auto_split_config: Any = "",
-    quality_preset: Any = "720p"
+    quality_preset: Any = "720p",
+    enable_motion_clip: Any = False,
+    motion_clip_params: Any = None
 ) -> str:
-    """异步视频生成（推荐用于长时间任务）
-    
-    Args:
-        video_path: 视频文件路径（必传）
-        text: 要转换的文本（可选，为空时只进行视频处理）
-        voice_index: 语音音色索引 (0-4)
-        output_path: 输出视频路径
-        segments_mode: 视频片段模式 ("keep" 保留指定片段, "cut" 剪掉指定片段)
-        segments: 视频片段配置 (JSON字符串，格式: [{"start": "00:00:05", "end": "00:00:15"}])
-        subtitle_style: 字幕样式配置 (JSON字符串)
-        auto_split_config: 智能分割配置 (JSON字符串)
-        quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")
-        
-    Returns:
-        任务ID和状态信息
-    """
     import json
-    # 保证所有复杂参数为字符串
     if not isinstance(segments, str):
         segments = json.dumps(segments, ensure_ascii=False)
     if not isinstance(subtitle_style, str):
         subtitle_style = json.dumps(subtitle_style, ensure_ascii=False)
     if not isinstance(auto_split_config, str):
         auto_split_config = json.dumps(auto_split_config, ensure_ascii=False)
-    
     return await create_video_generation_task(
         video_path, text, voice_index, output_path,
-        segments_mode, segments, subtitle_style, auto_split_config, quality_preset
+        segments_mode, segments, subtitle_style, auto_split_config, quality_preset,
+        enable_motion_clip, motion_clip_params
     )
 
 @mcp.tool()
@@ -873,35 +859,19 @@ async def generate_auto_video_sync(
     segments: Any = "",
     subtitle_style: Any = "",
     auto_split_config: Any = "",
-    quality_preset: Any = "720p"
+    quality_preset: Any = "720p",
+    enable_motion_clip: Any = False,
+    motion_clip_params: Any = None
 ) -> str:
-    """智能剪辑视频并自动添加字幕、语音（同步版本，适合短时间任务）
-    
-    Args:
-        video_path: 视频文件路径（必传）
-        text: 要转换的文本（可选，为空时只进行视频处理）
-        voice_index: 语音音色索引 (0-4)
-        output_path: 输出视频路径
-        segments_mode: 视频片段模式 ("keep" 保留指定片段, "cut" 剪掉指定片段)
-        segments: 视频片段配置 (JSON字符串，格式: [{"start": "00:00:05", "end": "00:00:15"}])
-        subtitle_style: 字幕样式配置 (JSON字符串)
-        auto_split_config: 智能分割配置 (JSON字符串)
-        quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")
-        
-    Returns:
-        生成结果信息（同步返回）
-    """
     import json
-    # 保证所有复杂参数为字符串
     if not isinstance(segments, str):
         segments = json.dumps(segments, ensure_ascii=False)
     if not isinstance(subtitle_style, str):
         subtitle_style = json.dumps(subtitle_style, ensure_ascii=False)
     if not isinstance(auto_split_config, str):
         auto_split_config = json.dumps(auto_split_config, ensure_ascii=False)
-    
-    # 使用同步处理
     return await generate_auto_video(
         video_path, text, voice_index, output_path,
-        segments_mode, segments, subtitle_style, auto_split_config, quality_preset
+        segments_mode, segments, subtitle_style, auto_split_config, quality_preset,
+        enable_motion_clip, motion_clip_params
     ) 

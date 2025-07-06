@@ -5,25 +5,17 @@
 
 import json
 import os
-import asyncio
 import edge_tts
 from tqdm import tqdm
 from pydub import AudioSegment
 from mcp.server.fastmcp import FastMCP
+import asyncio
 
 # 创建MCP实例
 mcp = FastMCP("audio-utils", log_level="ERROR")
 
 async def synthesize_and_get_durations(timing, voice):
-    """合成音频并获取每条字幕的朗读时长
-    
-    Args:
-        timing: 字幕时间列表
-        voice: 语音音色名称
-        
-    Returns:
-        dict: 包含音频路径和字幕片段信息的字典
-    """
+    """异步合成音频并获取每条字幕的朗读时长（主流程必须 await）"""
     audio_segments = []
     durations = []
     segments = []
@@ -77,16 +69,7 @@ async def synthesize_and_get_durations(timing, voice):
     return {"audio_path": audio_mp3_path, "segments": segments}
 
 async def synthesize_text_to_audio(text, voice, output_path="temp_audio.mp3"):
-    """将单个文本合成音频
-    
-    Args:
-        text: 要合成的文本
-        voice: 语音音色名称
-        output_path: 输出音频文件路径
-        
-    Returns:
-        float: 音频时长（秒）
-    """
+    """异步将单个文本合成音频"""
     communicate = edge_tts.Communicate(text=text, voice=voice)
     await communicate.save(output_path)
     
@@ -133,16 +116,7 @@ def create_silence_audio(duration_ms, output_path="silence.mp3"):
     return output_path
 
 async def text_to_speech(text, voice, output_file):
-    """将文本转换为语音
-    
-    Args:
-        text: 要转换的文本
-        voice: 语音音色
-        output_file: 输出音频文件路径
-        
-    Returns:
-        bool: 转换是否成功
-    """
+    """异步将文本转换为语音"""
     try:
         communicate = edge_tts.Communicate(text, voice)
         await communicate.save(output_file)
@@ -201,40 +175,43 @@ def get_audio_info(audio_file):
         from pydub import AudioSegment
         audio = AudioSegment.from_file(audio_file)
         
-        return {
-            "duration": len(audio) / 1000.0,  # 秒
+        info = {
+            "file_path": audio_file,
+            "duration_seconds": len(audio) / 1000.0,
+            "sample_rate": audio.frame_rate,
             "channels": audio.channels,
-            "sample_width": audio.sample_width,
-            "frame_rate": audio.frame_rate,
-            "file_size": os.path.getsize(audio_file)
+            "frame_width": audio.frame_width,
+            "file_size_mb": os.path.getsize(audio_file) / (1024 * 1024)
         }
+        
+        return info
     except Exception as e:
         return {"error": str(e)}
 
 @mcp.tool()
-async def convert_text_to_speech(text: str, voice: str, output_file: str) -> str:
-    """将文本转换为语音
+def convert_text_to_speech(text: str, voice: str, output_file: str) -> str:
+    """将文本转换为语音文件
     
     Args:
         text: 要转换的文本
-        voice: 语音音色
+        voice: 语音音色名称
         output_file: 输出音频文件路径
         
     Returns:
         转换结果信息
     """
     try:
-        success = await text_to_speech(text, voice, output_file)
+        success = text_to_speech(text, voice, output_file)
         if success:
             duration = get_audio_duration(output_file)
-            return f"文本转语音成功\n输出文件: {output_file}\n时长: {duration:.2f}秒"
+            return f"文本转语音成功！输出文件: {output_file}, 时长: {duration:.2f}秒"
         else:
             return "文本转语音失败"
     except Exception as e:
-        return f"文本转语音出错: {str(e)}"
+        return f"文本转语音时发生错误: {str(e)}"
 
 @mcp.tool()
-async def get_audio_file_info(audio_file: str) -> str:
+def get_audio_file_info(audio_file: str) -> str:
     """获取音频文件信息
     
     Args:
@@ -243,23 +220,26 @@ async def get_audio_file_info(audio_file: str) -> str:
     Returns:
         音频文件信息
     """
-    if not os.path.exists(audio_file):
-        return f"错误：音频文件不存在: {audio_file}"
-    
-    info = get_audio_info(audio_file)
-    if "error" in info:
-        return f"获取音频信息失败: {info['error']}"
-    
-    return f"""音频文件信息:
-文件路径: {audio_file}
-时长: {info['duration']:.2f}秒
+    try:
+        info = get_audio_info(audio_file)
+        if "error" in info:
+            return f"获取音频信息失败: {info['error']}"
+        
+        info_text = f"""音频文件信息:
+        
+文件路径: {info['file_path']}
+时长: {info['duration_seconds']:.2f}秒
+采样率: {info['sample_rate']}Hz
 声道数: {info['channels']}
-采样宽度: {info['sample_width']}字节
-采样率: {info['frame_rate']}Hz
-文件大小: {info['file_size']}字节"""
+位深度: {info['frame_width'] * 8}位
+文件大小: {info['file_size_mb']:.2f}MB
+"""
+        return info_text
+    except Exception as e:
+        return f"获取音频信息时发生错误: {str(e)}"
 
 @mcp.tool()
-async def validate_audio_file_tool(audio_file: str) -> str:
+def validate_audio_file_tool(audio_file: str) -> str:
     """验证音频文件
     
     Args:
@@ -268,14 +248,17 @@ async def validate_audio_file_tool(audio_file: str) -> str:
     Returns:
         验证结果
     """
-    if validate_audio_file(audio_file):
-        duration = get_audio_duration(audio_file)
-        return f"音频文件有效\n文件路径: {audio_file}\n时长: {duration:.2f}秒"
-    else:
-        return f"音频文件无效或不存在: {audio_file}"
+    try:
+        if validate_audio_file(audio_file):
+            duration = get_audio_duration(audio_file)
+            return f"音频文件验证通过！文件有效，时长: {duration:.2f}秒"
+        else:
+            return f"音频文件验证失败: {audio_file} 不存在或格式无效"
+    except Exception as e:
+        return f"验证音频文件时发生错误: {str(e)}"
 
 @mcp.tool()
-async def get_audio_duration_tool(audio_file: str) -> str:
+def get_audio_duration_tool(audio_file: str) -> str:
     """获取音频文件时长
     
     Args:
@@ -284,35 +267,39 @@ async def get_audio_duration_tool(audio_file: str) -> str:
     Returns:
         音频时长信息
     """
-    if not os.path.exists(audio_file):
-        return f"错误：音频文件不存在: {audio_file}"
-    
-    duration = get_audio_duration(audio_file)
-    if duration > 0:
-        return f"音频时长: {duration:.2f}秒"
-    else:
-        return "无法获取音频时长"
+    try:
+        duration = get_audio_duration(audio_file)
+        if duration > 0:
+            return f"音频时长: {duration:.2f}秒 ({duration/60:.2f}分钟)"
+        else:
+            return f"无法获取音频时长: {audio_file}"
+    except Exception as e:
+        return f"获取音频时长时发生错误: {str(e)}"
 
 @mcp.tool()
-async def list_available_voices() -> str:
-    """获取可用的语音音色列表
+def list_available_voices() -> str:
+    """列出可用的语音音色
     
     Returns:
-        可用的语音音色列表
+        可用语音音色列表
     """
     try:
-        voices = await edge_tts.list_voices()
-        voice_list = []
-        for voice in voices:
-            voice_list.append(f"{voice['ShortName']} ({voice['Gender']})")
-        return "可用的语音音色:\n" + "\n".join(voice_list[:20])  # 限制显示前20个
+        # 使用asyncio运行异步函数
+        voices = asyncio.run(edge_tts.list_voices())
+        
+        # 过滤中文语音
+        chinese_voices = [v for v in voices if v["Locale"].startswith("zh-CN")]
+        
+        voices_info = "可用的中文语音音色:\n\n"
+        for i, voice in enumerate(chinese_voices[:10]):  # 只显示前10个
+            voices_info += f"{i+1}. {voice['ShortName']} ({voice['Gender']})\n"
+            voices_info += f"   语言: {voice['Locale']}\n"
+            voices_info += f"   描述: {voice.get('FriendlyName', 'N/A')}\n\n"
+        
+        return voices_info
     except Exception as e:
         return f"获取语音音色列表失败: {str(e)}"
 
 def get_mcp_instance():
-    """获取MCP实例
-    
-    Returns:
-        FastMCP: MCP实例
-    """
+    """获取MCP实例"""
     return mcp 

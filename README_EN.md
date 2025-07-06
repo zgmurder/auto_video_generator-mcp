@@ -13,6 +13,7 @@ A smart video generation system based on MCP (Model Context Protocol), supportin
 - **Multi-Quality Output**: Support 240p to 1080p quality presets
 - **Async Task Processing**: Support long-running task processing
 - **Time Mark Control**: Support time marks in text to control silence duration
+- **Automatic Duplicate/Static Frame Removal**: One-click detection and removal of static/boring segments to keep only the highlights (optional, off by default)
 
 ### Technical Features
 - **Modular Architecture**: Clear module separation for easy maintenance and extension
@@ -148,6 +149,25 @@ status = await get_task_status(task_id)
 await cancel_task(task_id)
 ```
 
+#### 4. Automatic Duplicate/Static Frame Removal
+```python
+# Automatically detect and cut static/boring segments (e.g., long periods with no movement)
+import json
+with open("best_motion_clip_params.json", "r", encoding="utf-8") as f:
+    motion_params = json.load(f)
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    output_path="output_motion_clip.mp4",
+    enable_motion_clip=True,  # Enable automatic static segment detection
+    motion_clip_params=motion_params  # Optional, use recommended or custom params
+)
+```
+
+> **Note:**
+> - When `enable_motion_clip=True`, the system will automatically analyze the video and cut all static/duplicate frame segments.
+> - `motion_clip_params` is optional, supports custom motion threshold, min static duration, sample step, etc. Recommended to use `best_motion_clip_params.json`.
+> - Fully compatible with subtitles, voice, and all other features.
+
 ##  Configuration
 
 ### Quality Presets
@@ -192,6 +212,8 @@ Main video generation interface with async task support.
 - `subtitle_style` (str): Subtitle style configuration JSON string (optional)
 - `auto_split_config` (str): Auto-split configuration JSON string (optional)
 - `quality_preset` (str): Quality preset (default: "720p")
+- `enable_motion_clip` (bool): Whether to automatically detect and cut static/duplicate frame segments (default False)
+- `motion_clip_params` (dict): Motion detection parameters (optional, recommended to use best_motion_clip_params.json)
 
 #### `generate_auto_video_sync`
 Synchronous video generation interface, suitable for short tasks.

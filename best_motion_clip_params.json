@@ -1,0 +1,5 @@
+{
+  "motion_threshold": 0.1,
+  "min_static_duration": 2,
+  "sample_step": 2
+} 

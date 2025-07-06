@@ -8,6 +8,7 @@
 
 ### 核心功能
 - **智能视频剪辑**: 支持视频片段保留/剪切模式
+- **自动删除重复帧/静止片段**: 一键检测并剪掉无效画面，提升视频精华度（可选参数，默认关闭）
 - **自动字幕生成**: 智能文本分割和字幕样式自定义
 - **语音合成**: 集成 Azure 语音服务，支持多种音色
 - **多画质输出**: 支持 240p 到 1080p 多种画质预设
@@ -148,6 +149,25 @@ status = await get_task_status(task_id)
 await cancel_task(task_id)
 ```
 
+#### 4. 自动删除重复帧/静止片段
+```python
+# 自动检测并剪掉视频中的静止/无聊片段（如长时间无动作画面）
+import json
+with open("best_motion_clip_params.json", "r", encoding="utf-8") as f:
+    motion_params = json.load(f)
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    output_path="output_motion_clip.mp4",
+    enable_motion_clip=True,  # 启用自动静止片段检测
+    motion_clip_params=motion_params  # 可选，传入推荐参数或自定义
+)
+```
+
+> **说明**：
+> - `enable_motion_clip=True` 时，系统会自动分析视频，检测并剪掉所有静止/重复帧片段。
+> - `motion_clip_params` 可选，支持自定义运动阈值、最小静止时长、采样步长等，推荐直接用 `best_motion_clip_params.json`。
+> - 不影响原有字幕、语音等功能，完全兼容。
+
 ##  配置说明
 
 ### 画质预设
@@ -192,6 +212,8 @@ await cancel_task(task_id)
 - `subtitle_style` (str): 字幕样式配置 JSON 字符串 (可选)
 - `auto_split_config` (str): 智能分割配置 JSON 字符串 (可选)
 - `quality_preset` (str): 画质预设 (默认: "720p")
+- `enable_motion_clip` (bool): 是否自动检测并剪掉静止/重复帧片段（默认 False）
+- `motion_clip_params` (dict): 运动检测参数（可选，推荐用 best_motion_clip_params.json）
 
 #### `generate_auto_video_sync`
 同步视频生成接口，适合短时间任务。

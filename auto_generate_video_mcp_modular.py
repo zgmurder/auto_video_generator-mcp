@@ -36,9 +36,12 @@ async def generate_auto_video_mcp(
     segments: Any = "",
     subtitle_style: Any = "",
     auto_split_config: Any = "",
-    quality_preset: Any = "720p"
+    quality_preset: Any = "720p",
+    enable_motion_clip: Any = False,
+    motion_clip_params: Any = None
 ) -> str:
     """智能剪辑视频并自动添加字幕、语音（主要功能）
+    新增：enable_motion_clip, motion_clip_params
     
     Args:
         video_path: 视频文件路径（必传）
@@ -50,6 +53,8 @@ async def generate_auto_video_mcp(
         subtitle_style: 字幕样式配置 (JSON字符串)
         auto_split_config: 智能分割配置 (JSON字符串)
         quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")
+        enable_motion_clip: 是否启用运动剪辑
+        motion_clip_params: 运动剪辑参数
         
     Returns:
         生成结果信息
@@ -64,7 +69,8 @@ async def generate_auto_video_mcp(
         auto_split_config = json.dumps(auto_split_config, ensure_ascii=False)
     return await generate_auto_video(
         video_path, text, voice_index, output_path, 
-        segments_mode, segments, subtitle_style, auto_split_config, quality_preset
+        segments_mode, segments, subtitle_style, auto_split_config, quality_preset,
+        enable_motion_clip, motion_clip_params
     )
 
 # 配置获取工具
@@ -140,6 +146,8 @@ async def get_all_available_tools() -> str:
 - subtitle_style: 字幕样式配置 JSON字符串（可选）
 - auto_split_config: 智能分割配置 JSON字符串（可选）
 - quality_preset: 画质预设 ("240p", "360p", "480p", "720p", "1080p")（可选，默认720p）
+- enable_motion_clip: 是否启用运动剪辑
+- motion_clip_params: 运动剪辑参数
 
 === 画质预设说明 ===
 - 240p: 低画质预览 (426x240, 500k) - 适合快速预览

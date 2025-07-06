@@ -10,17 +10,12 @@ from . import audio_utils
 from . import subtitle_utils
 from . import video_utils
 from . import mcp_tools
-
-# 配置模块
-from . import config
+from . import video_processing_utils
 
 # 版本信息
 __version__ = "2.0.0"
 __author__ = "Auto Video Generator Team"
 __description__ = "模块化自动视频生成系统"
-
-# 导出主要类
-from .config import ConfigManager, get_config
 
 # 模块列表
 __all__ = [
@@ -31,16 +26,8 @@ __all__ = [
     "subtitle_utils",
     "video_utils",
     "mcp_tools",
-    
-    # 配置
-    "config",
-    
-    # 主要类
-    "ConfigManager",
-    
-    # 便捷函数
-    "get_config",
-    
+    "video_processing_utils",
+
     # 版本信息
     "__version__",
     "__author__",

@@ -7,10 +7,97 @@ import numpy as np
 import opencc
 from PIL import Image, ImageDraw, ImageFont
 import re
+import json
 from mcp.server.fastmcp import FastMCP
 
 # 创建MCP实例
 mcp = FastMCP("subtitle-utils", log_level="ERROR")
+
+def normalize_subtitle_style(subtitle_style):
+    """
+    标准化字幕样式配置，支持多种字段名格式
+    
+    Args:
+        subtitle_style: 原始字幕样式配置（字符串或字典）
+        
+    Returns:
+        dict: 标准化后的字幕样式配置
+    """
+    if isinstance(subtitle_style, str):
+        try:
+            subtitle_style = json.loads(subtitle_style)
+        except json.JSONDecodeError:
+            print("警告：subtitle_style JSON格式错误，使用默认配置")
+            subtitle_style = {}
+    
+    if not isinstance(subtitle_style, dict):
+        subtitle_style = {}
+    
+    # 标准化字段名映射
+    field_mapping = {
+        # 字体大小
+        'fontSize': ['fontSize', 'font_size', 'size'],
+        # 字体颜色
+        'color': ['color', 'font_color', 'fontColor', 'text_color', 'textColor'],
+        # 背景颜色
+        'bgColor': ['bgColor', 'bg_color', 'background_color', 'backgroundColor'],
+        # 字体路径
+        'fontPath': ['fontPath', 'font_path', 'font'],
+        # 左右边距
+        'marginX': ['marginX', 'margin_x', 'margin'],
+        # 底部边距
+        'marginBottom': ['marginBottom', 'margin_bottom', 'bottom_margin'],
+        # 字幕高度
+        'height': ['height', 'subtitle_height']
+    }
+    
+    normalized = {}
+    
+    # 应用字段名映射
+    for standard_field, possible_fields in field_mapping.items():
+        for field in possible_fields:
+            if field in subtitle_style:
+                normalized[standard_field] = subtitle_style[field]
+                break
+    
+    # 设置默认值
+    defaults = {
+        'fontSize': 40,
+        'color': 'white',
+        'bgColor': [0, 0, 0, 0],
+        'fontPath': 'C:\\Windows\\Fonts\\msyh.ttc',
+        'marginX': 100,
+        'marginBottom': 50,
+        'height': 100
+    }
+    
+    for field, default_value in defaults.items():
+        if field not in normalized:
+            normalized[field] = default_value
+    
+    # 特殊处理：颜色格式转换
+    if 'color' in normalized:
+        color = normalized['color']
+        if isinstance(color, str) and color.startswith('#'):
+            # 将十六进制颜色转换为RGB
+            color = color.lstrip('#')
+            if len(color) == 6:
+                normalized['color'] = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+    
+    if 'bgColor' in normalized:
+        bg_color = normalized['bgColor']
+        if isinstance(bg_color, str):
+            if bg_color.lower() == 'transparent':
+                normalized['bgColor'] = [0, 0, 0, 0]
+            elif bg_color.startswith('#'):
+                # 将十六进制颜色转换为RGBA
+                color = bg_color.lstrip('#')
+                if len(color) == 6:
+                    rgb = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+                    normalized['bgColor'] = list(rgb) + [0]  # 添加透明度0
+    
+    print(f"[字幕样式] 标准化配置: {normalized}")
+    return normalized
 
 def create_subtitle_image(text, width, height, font_path, fontsize=40, color='black', bg_color=(0,0,0,0), margin_x=100, margin_bottom=50):
     """创建字幕图片

@@ -214,14 +214,8 @@ async def generate_auto_video(
                 return "错误：segments 参数JSON格式错误"
         
         # 解析subtitle_style配置
-        subtitle_config = {}
-        if subtitle_style:
-            try:
-                subtitle_config = json.loads(subtitle_style)
-                if not isinstance(subtitle_config, dict):
-                    return "错误：subtitle_style 参数格式错误，应为JSON对象"
-            except json.JSONDecodeError:
-                return "错误：subtitle_style 参数JSON格式错误"
+        from .subtitle_utils import normalize_subtitle_style
+        subtitle_config = normalize_subtitle_style(subtitle_style)
         
         # 解析auto_split_config配置
         split_config = {}

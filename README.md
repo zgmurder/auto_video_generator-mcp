@@ -241,6 +241,22 @@ benchmark_result = await benchmark_gpu_performance_mcp()
 ```
 **传递方式**: `subtitle_style='{"fontSize": 50, "color": "white"}'`
 
+**支持的字段名格式**:
+- 字体大小: `fontSize`, `font_size`, `size`
+- 字体颜色: `color`, `font_color`, `fontColor`, `text_color`, `textColor`
+- 背景颜色: `bgColor`, `bg_color`, `background_color`, `backgroundColor`
+- 字体路径: `fontPath`, `font_path`, `font`
+- 左右边距: `marginX`, `margin_x`, `margin`
+- 底部边距: `marginBottom`, `margin_bottom`, `bottom_margin`
+- 字幕高度: `height`, `subtitle_height`
+
+**颜色格式支持**:
+- 颜色名称: `"white"`, `"black"`, `"red"`, `"yellow"` 等
+- 十六进制: `"#000000"`, `"#FFFFFF"` 等
+- RGB数组: `[255, 255, 255]`
+- RGBA数组: `[0, 0, 0, 30]` (最后一个数字是透明度)
+- 透明背景: `"transparent"`
+
 #### 3. 智能分割配置 (`auto_split_config`)
 ```json
 {
@@ -273,6 +289,13 @@ result = await generate_auto_video_mcp(
 result = await generate_auto_video_mcp(
     video_path="input.mp4",
     segments='[{"start": "00:00:05", "end": "00:00:15"}]'  # 正确！
+)
+
+# ✅ 正确：支持多种字段名格式
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    text="测试字幕样式",
+    subtitle_style='{"font_color": "#000000", "background_color": "transparent", "font_size": 36}'  # 支持多种字段名
 )
 ```
 

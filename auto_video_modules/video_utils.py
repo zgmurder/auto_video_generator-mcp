@@ -441,13 +441,16 @@ async def generate_video(config, timing):
     print("正在生成字幕图片...")
     
     # 读取字幕样式配置
-    font_path = subtitle_style.get('fontPath', './simhei.ttf')
-    font_size = subtitle_style.get('fontSize', 40)
-    color = subtitle_style.get('color', 'white')
-    bg_color = tuple(subtitle_style.get('bgColor', [0,0,0,0]))
-    margin_x = subtitle_style.get('marginX', 100)
-    margin_bottom = subtitle_style.get('marginBottom', 50)
-    subtitle_height = subtitle_style.get('height', 100)
+    from .subtitle_utils import normalize_subtitle_style
+    normalized_style = normalize_subtitle_style(subtitle_style)
+    
+    font_path = normalized_style.get('fontPath', './simhei.ttf')
+    font_size = normalized_style.get('fontSize', 40)
+    color = normalized_style.get('color', 'white')
+    bg_color = tuple(normalized_style.get('bgColor', [0,0,0,0]))
+    margin_x = normalized_style.get('marginX', 100)
+    margin_bottom = normalized_style.get('marginBottom', 50)
+    subtitle_height = normalized_style.get('height', 100)
     
     for t in tqdm(timings, desc="字幕生成", ascii=True):
         txt = t['text']

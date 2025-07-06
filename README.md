@@ -195,56 +195,253 @@ result = await generate_auto_video_mcp(
 }
 ```
 
-##  API 接口
+##  MCP 工具函数说明
 
-### 核心功能接口
+本项目基于 Model Context Protocol (MCP) 构建，提供了一套完整的视频生成工具函数。所有函数都通过 FastMCP 框架暴露为标准化接口，支持异步调用和任务管理。
+
+### 核心视频生成函数
 
 #### `generate_auto_video_mcp`
-主要视频生成接口，支持异步任务处理。
+**主要视频生成接口**，支持完整的视频处理流程，包括语音合成、字幕生成、视频剪辑等。
 
-**参数:**
-- `video_path` (str): 视频文件路径 (必传)
-- `text` (str): 要转换的文本 (可选)
-- `voice_index` (int): 语音音色索引 0-4 (默认: 0)
-- `output_path` (str): 输出视频路径 (默认: "output_video.mp4")
-- `segments_mode` (str): 视频片段模式 "keep" 或 "cut" (默认: "keep")
-- `segments` (str): 视频片段配置 JSON 字符串 (可选)
-- `subtitle_style` (str): 字幕样式配置 JSON 字符串 (可选)
-- `auto_split_config` (str): 智能分割配置 JSON 字符串 (可选)
-- `quality_preset` (str): 画质预设 (默认: "720p")
-- `enable_motion_clip` (bool): 是否自动检测并剪掉静止/重复帧片段（默认 False）
-- `motion_clip_params` (dict): 运动检测参数（可选，推荐用 best_motion_clip_params.json）
+**参数说明:**
+- `video_path` (str): 输入视频文件路径 (必传)
+- `text` (str): 要转换为语音的文本内容 (可选，为空时仅进行视频处理)
+- `voice_index` (int): 语音音色索引，范围 0-4 (默认: 0)
+  - 0: zh-CN-XiaoxiaoNeural (默认女声)
+  - 1-4: 其他 Azure 语音音色
+- `output_path` (str): 输出视频文件路径 (默认: "output_video.mp4")
+- `segments_mode` (str): 视频片段处理模式 (默认: "keep")
+  - "keep": 保留指定片段
+  - "cut": 剪切指定片段
+- `segments` (str): 视频片段配置，JSON 字符串格式 (可选)
+  ```json
+  [{"start": "00:00:05", "end": "00:00:15"}, {"start": "00:00:30", "end": "00:00:45"}]
+  ```
+- `subtitle_style` (str): 字幕样式配置，JSON 字符串格式 (可选)
+  ```json
+  {
+    "fontSize": 50,
+    "color": "white",
+    "bgColor": [0, 0, 0, 30],
+    "fontPath": "C:\\Windows\\Fonts\\msyh.ttc",
+    "marginX": 100,
+    "marginBottom": 50
+  }
+  ```
+- `auto_split_config` (str): 智能文本分割配置，JSON 字符串格式 (可选)
+- `quality_preset` (str): 输出视频画质预设 (默认: "720p")
+  - 支持: "240p", "360p", "480p", "720p", "1080p"
+- `enable_motion_clip` (bool): 是否启用自动静止片段检测 (默认: False)
+- `motion_clip_params` (dict): 运动检测参数配置 (可选)
+  ```json
+  {
+    "motion_threshold": 0.1,
+    "min_static_duration": 2.0,
+    "sample_step": 1
+  }
+  ```
+
+**返回值:** JSON 字符串，包含处理结果和状态信息
+
+**使用示例:**
+```python
+result = await generate_auto_video_mcp(
+    video_path="input.mp4",
+    text="欢迎观看本视频，这是AI自动生成的解说。",
+    voice_index=0,
+    output_path="output.mp4",
+    quality_preset="1080p",
+    enable_motion_clip=True
+)
+```
 
 #### `generate_auto_video_sync`
-同步视频生成接口，适合短时间任务。
+**同步视频生成接口**，适合短时间任务，会阻塞直到处理完成。
+
+**参数:** 与 `generate_auto_video_mcp` 相同
+
+**特点:**
+- 同步执行，等待处理完成
+- 适合短视频或快速处理
+- 直接返回最终结果
 
 #### `generate_auto_video_async`
-异步视频生成接口，适合长时间任务。
+**异步视频生成接口**，适合长时间任务，立即返回任务ID。
 
-### 任务管理接口
+**参数:** 与 `generate_auto_video_mcp` 相同
 
-#### `get_task_status(task_id)`
-获取任务状态和进度信息。
+**返回值:** 任务ID字符串
+
+**特点:**
+- 异步执行，不阻塞调用
+- 适合长视频或复杂处理
+- 需要通过任务管理接口查询状态
+
+### 任务管理函数
+
+#### `get_task_status(task_id: str)`
+获取指定任务的详细状态信息。
+
+**参数:**
+- `task_id` (str): 任务ID
+
+**返回值:** JSON 字符串，包含任务状态、进度、结果等信息
+```json
+{
+  "task_id": "uuid-string",
+  "status": "pending|running|completed|failed",
+  "progress": 75,
+  "result": "output_video.mp4",
+  "error": null,
+  "start_time": "2024-01-01T10:00:00",
+  "created_at": "2024-01-01T09:55:00"
+}
+```
 
 #### `list_all_tasks()`
-列出所有任务及其状态。
+列出系统中所有任务的概览信息。
 
-#### `cancel_task(task_id)`
+**返回值:** JSON 字符串，包含所有任务的列表
+```json
+[
+  {
+    "task_id": "uuid-1",
+    "status": "completed",
+    "progress": 100,
+    "created_at": "2024-01-01T09:55:00"
+  },
+  {
+    "task_id": "uuid-2", 
+    "status": "running",
+    "progress": 45,
+    "created_at": "2024-01-01T10:00:00"
+  }
+]
+```
+
+#### `cancel_task(task_id: str)`
 取消正在运行的任务。
 
-### 配置查询接口
+**参数:**
+- `task_id` (str): 要取消的任务ID
+
+**返回值:** 操作结果字符串
+
+### 系统信息查询函数
 
 #### `get_system_status()`
-获取系统状态信息。
+获取系统整体状态信息，包括配置、依赖、资源等。
+
+**返回值:** JSON 字符串，包含系统状态
+```json
+{
+  "ffmpeg_available": true,
+  "azure_speech_configured": true,
+  "font_available": true,
+  "temp_directory": "C:\\temp",
+  "max_concurrent_tasks": 5,
+  "active_tasks": 2
+}
+```
 
 #### `get_available_voice_options()`
-获取可用的语音选项。
+获取所有可用的语音选项列表。
 
-#### `validate_input_parameters(text, video_path, voice_index)`
-验证输入参数的有效性。
+**返回值:** JSON 字符串，包含语音选项
+```json
+[
+  {
+    "index": 0,
+    "name": "zh-CN-XiaoxiaoNeural",
+    "description": "默认女声",
+    "language": "zh-CN"
+  },
+  {
+    "index": 1,
+    "name": "zh-CN-YunxiNeural", 
+    "description": "男声",
+    "language": "zh-CN"
+  }
+]
+```
 
-#### `get_generation_estimate(text, video_path)`
-获取生成时间估算。
+### 参数验证函数
+
+#### `validate_input_parameters(text: str, video_path: str, voice_index: int = 0)`
+验证输入参数的有效性和完整性。
+
+**参数:**
+- `text` (str): 要验证的文本内容
+- `video_path` (str): 要验证的视频文件路径
+- `voice_index` (int): 要验证的语音索引
+
+**返回值:** JSON 字符串，包含验证结果
+```json
+{
+  "valid": true,
+  "errors": [],
+  "warnings": ["视频文件较大，建议使用异步处理"],
+  "video_info": {
+    "duration": 120.5,
+    "resolution": "1920x1080",
+    "format": "mp4"
+  }
+}
+```
+
+#### `get_generation_estimate(text: str, video_path: str)`
+根据输入参数估算视频生成所需时间。
+
+**参数:**
+- `text` (str): 文本内容
+- `video_path` (str): 视频文件路径
+
+**返回值:** JSON 字符串，包含时间估算
+```json
+{
+  "estimated_time": 180,
+  "time_unit": "seconds",
+  "factors": {
+    "video_duration": 120,
+    "text_length": 500,
+    "processing_complexity": "medium"
+  },
+  "recommendation": "建议使用异步处理"
+}
+```
+
+### 工具函数调用流程
+
+#### 基本使用流程
+1. **参数验证**: 使用 `validate_input_parameters()` 验证输入
+2. **时间估算**: 使用 `get_generation_estimate()` 估算处理时间
+3. **选择接口**: 根据估算时间选择同步或异步接口
+4. **任务监控**: 异步任务使用 `get_task_status()` 监控进度
+5. **结果获取**: 从返回结果中获取输出文件路径
+
+#### 高级使用流程
+1. **系统检查**: 使用 `get_system_status()` 检查系统状态
+2. **语音选择**: 使用 `get_available_voice_options()` 选择合适的语音
+3. **批量处理**: 使用 `list_all_tasks()` 管理多个任务
+4. **异常处理**: 使用 `cancel_task()` 处理异常情况
+
+### 错误处理
+
+所有工具函数都包含完善的错误处理机制：
+
+- **参数错误**: 返回详细的错误描述和修正建议
+- **文件错误**: 检查文件存在性和格式有效性
+- **系统错误**: 检查依赖项和系统资源
+- **网络错误**: 处理 Azure 语音服务连接问题
+- **处理错误**: 提供详细的错误日志和恢复建议
+
+### 性能优化建议
+
+1. **短视频 (< 30秒)**: 使用 `generate_auto_video_sync`
+2. **长视频 (> 30秒)**: 使用 `generate_auto_video_async`
+3. **批量处理**: 合理控制并发任务数量
+4. **资源监控**: 定期检查系统状态和资源使用情况
 
 ##  项目结构
 
